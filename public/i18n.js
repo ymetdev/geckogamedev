@@ -43,7 +43,7 @@ en: {
   // history actions
   a_restored: 'restored', a_undone: 'undid', a_created: 'created', a_claimed: 'claimed', a_unclaimed: 'released', a_ready_to_test: 'marked ready to test', a_complete: 'passed (complete)', a_test_failed: 'test failed',
   a_reopened: 'reopened', a_commented: 'commented', a_edited: 'edited', a_file_added: 'attached', a_file_removed: 'removed file', a_linked: 'linked', a_unlinked: 'unlinked',
-  tab_filters: 'Filters',
+  tab_filters: 'Filters', sum_btn: 'Summary', help_btn: 'Guide', new_btn: 'New card',
   boot_msg: 'Loading…', boot_slow: 'The free server may need up to a minute to wake up. Please wait…',
   undo: 'Undo', u_claimed: 'You took #{0}', u_released: 'Released #{0}', u_passed: '#{0} passed ✓', u_failed: 'Sent #{0} back to dev', u_ready: 'Sent #{0} to testing', u_deleted: 'Deleted #{0}', u_restored: 'Restored #{0}', undone: 'Undone',
   need_dev: '🎯 My work', need_tester: '🧪 To test', need_admin: '🎯 Waiting on me', sort_auto: '↕ Auto order', sort_manual: '↕ Manual order', sort_tip_auto: 'Sorted by priority, then due date. Click for manual order (drag to rearrange).', sort_tip_manual: 'Manual order: drag cards up/down. Click for automatic order.',
@@ -98,7 +98,7 @@ th: {
   bell: 'การแจ้งเตือน', no_notif: 'ไม่มีอะไรใหม่', n_mention: '{0} แท็กคุณใน #{1}', n_failed: 'เทสไม่ผ่านที่การ์ด #{0} ของคุณ', n_ready: 'มี {0} ใบรอเทส', n_overdue: 'การ์ดของคุณเลยกำหนด {0} ใบ',
   a_restored: 'กู้คืนการ์ด', a_undone: 'เลิกทำ', a_created: 'สร้างการ์ด', a_claimed: 'รับงาน', a_unclaimed: 'ปล่อยการ์ด', a_ready_to_test: 'ส่งพร้อมเทส', a_complete: 'เทสผ่าน (เสร็จสิ้น)', a_test_failed: 'เทสไม่ผ่าน',
   a_reopened: 'เปิดใหม่', a_commented: 'คอมเมนต์', a_edited: 'แก้ไข', a_file_added: 'แนบไฟล์', a_file_removed: 'ลบไฟล์', a_linked: 'ลิงก์การ์ด', a_unlinked: 'เลิกลิงก์',
-  tab_filters: 'ตัวกรอง',
+  tab_filters: 'ตัวกรอง', sum_btn: 'สรุป', help_btn: 'วิธีใช้', new_btn: 'สร้างการ์ด',
   boot_msg: 'กำลังโหลด…', boot_slow: 'เซิร์ฟเวอร์ฟรีอาจใช้เวลาตื่นขึ้นสักครู่ (ไม่เกิน 1 นาที) กรุณารอสักครู่…',
   undo: 'เลิกทำ', u_claimed: 'คุณรับ #{0} แล้ว', u_released: 'ปล่อย #{0} แล้ว', u_passed: '#{0} ผ่านแล้ว ✓', u_failed: 'ส่ง #{0} กลับให้ Dev แล้ว', u_ready: 'ส่ง #{0} ไปเทสแล้ว', u_deleted: 'ลบ #{0} แล้ว', u_restored: 'กู้คืน #{0} แล้ว', undone: 'เลิกทำแล้ว',
   need_dev: '🎯 งานของฉัน', need_tester: '🧪 รอเทส', need_admin: '🎯 รอฉัน', sort_auto: '↕ เรียงอัตโนมัติ', sort_manual: '↕ เรียงเอง', sort_tip_auto: 'เรียงตามความสำคัญแล้วตามวันกำหนด กดเพื่อเรียงเอง (ลากการ์ดสลับลำดับได้)', sort_tip_manual: 'เรียงเอง: ลากการ์ดขึ้น/ลง กดเพื่อกลับไปเรียงอัตโนมัติ',

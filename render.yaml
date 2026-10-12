@@ -17,3 +17,5 @@ services:
         sync: false
       - key: DISCORD_WEBHOOK_URL   # optional: Discord channel webhook for ready/fail/mention alerts
         sync: false
+      - key: DISCORD_TESTER_ROLE_ID   # optional: Discord role ID to @mention when a card is ready to test
+        sync: false

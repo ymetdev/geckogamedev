@@ -25,11 +25,15 @@ const LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 let toastT;
 function toast(m, action, ms) { // optional action = { label, fn }: shows a button (used for Undo)
   const el = $('#toast');
+  // an open modal dialog makes everything outside it unclickable, so the toast lives inside the top-most open dialog
+  const host = $$('dialog[open]').at(-1) || document.body;
+  if (el.parentElement !== host) host.appendChild(el);
   el.innerHTML = `<span>${esc(m)}</span>${action ? `<button id="toastAct">${esc(action.label)}</button>` : ''}`;
   el.className = action ? 'ok' : ''; el.style.display = 'flex';
-  if (action) $('#toastAct').onclick = async () => { el.style.display = 'none'; try { await action.fn(); } catch (e) { toast(e.message); } };
-  clearTimeout(toastT); toastT = setTimeout(() => (el.style.display = 'none'), ms || (action ? 8000 : 3800));
+  if (action) $('#toastAct').onclick = async () => { hideToast(); try { await action.fn(); } catch (e) { toast(e.message); } };
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms || (action ? 8000 : 3800));
 }
+function hideToast() { $('#toast').style.display = 'none'; }
 const ERRS = [[/^Not logged in/, 'e_login'], [/^Role "(.+)" is not allowed/, 'e_role'], [/^Card #(\d+) not found/, 'e_nocard'], [/^Already claimed by (.+?)\.?$/, 'e_claimed'], [/^Card already complete/, 'e_complete'],
   [/^Not your card/, 'e_notyours'], [/^Only an assignee/, 'e_assignee'], [/^Card must be in progress/, 'e_inprog'], [/^test_steps required/, 'e_steps'], [/^Card is not ready to test/, 'e_notready'], [/^reason required/, 'e_reason'],
   [/^text required/, 'e_text'], [/^title required/, 'e_title'], [/^Only the reporter, the owner/, 'e_edit'], [/^File too large \(max (\d+) MB\)/, 'e_toolarge'], [/^Only PNG\/JPEG/, 'e_filetype'], [/^Max (\d+) files per card/, 'e_maxfiles'],
@@ -151,11 +155,10 @@ function announce(old) { // glow the cards other people changed, and say what ha
   for (const c of cards) {
     const prev = old.get(c.id); if (prev && prev.updated_at === c.updated_at && prev.status === c.status) continue;
     const last = c.history.at(-1); if (!last || last.user === user.email) continue; // my own actions need no highlight
-    flash.add(c.id);
+    flash.add(c.id); setTimeout(() => { flash.delete(c.id); $(`.card[data-id="${c.id}"]`)?.classList.remove('flash'); }, 2600); // each card's glow ends on its own clock
     if (msgs.length < 2) msgs.push(`${nameOf(last.user)} · #${c.id} ${t('a_' + last.action)}`);
   }
   if (msgs.length) toast(msgs.join('  |  '));
-  setTimeout(() => { flash.clear(); $$('.card.flash').forEach((el) => el.classList.remove('flash')); }, 2600);
 }
 function startEvents() {
   if (es || !window.EventSource) return;
@@ -184,7 +187,7 @@ $$('#langSeg button,[data-langseg] button').forEach((b) => (b.onclick = () => se
 function showLogin() { bootHide(); user = null; stopEvents(); $('#userBox').innerHTML = ''; if (!$('#loginDlg').open) $('#loginDlg').showModal(); initLogin(); }
 function renderUserBox() {
   const u = user;
-  $('#userBox').innerHTML = `<div class="chip" id="chip"><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
+  $('#userBox').innerHTML = `<div class="chip" id="chip" role="button" tabindex="0" aria-label="${esc(u.name)}"><span class="av" style="background:hsl(${hue(u.email)} 45% 40%)">${esc([...u.name][0]?.toUpperCase() || '?')}</span><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
    <div class="menu" id="menu">
      <button data-m="token">${t('menu_token')}</button>
      ${u.role === 'admin' ? `<button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button>` : ''}
@@ -359,9 +362,9 @@ function cardHtml(c) {
     c.parent && cards.some((x) => x.id === c.parent) ? `<span class="pill">↳ #${c.parent}</span>` : '', cards.some((x) => x.parent === c.id) ? `<span class="pill">⑂ ${cards.filter((x) => x.parent === c.id).length}</span>` : '',
     c.files.length ? `<span class="pill">📎 ${c.files.length}</span>` : '',
 ].filter(Boolean).join('');
-  return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}${flash.has(c.id) ? ' flash' : ''}" data-id="${c.id}" draggable="true">
-    <div class="row">${ctl}<span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
-    <span class="meta pri-${c.priority}" style="margin-left:auto">${t('pri_' + c.priority)}</span></div>
+  return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}${flash.has(c.id) ? ' flash' : ''}" data-id="${c.id}" data-pri="${c.priority}" draggable="true">
+    <div class="row">${ctl}<span class="cid">#${c.id}</span><span class="tag ${c.type}">${c.type}</span>
+    <span class="prib pri-${c.priority}">${t('pri_' + c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>
     ${c.tags.length ? `<div class="row">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : ''}
     ${chips ? `<div class="chiprow">${chips}</div>` : ''}${claim}</div>`;
@@ -385,9 +388,9 @@ function renderBoard() {
     const empty = anyFilter() ? t('no_match') : t('empty_' + k);
     return `<section class="col${mcol === k ? ' active' : ''}" data-status="${k}"><h2><span class="dot" style="background:var(${col})"></span>${t('s_' + k)}
       <span class="cnt">${mineN && role('dev', 'admin') ? `<span class="count me" title="${t('mine')}">👤 ${mineN}</span>` : ''}<span class="count${hot ? ' hot' : ''}">${list.length}</span></span></h2>`
-      + (list.map(cardHtml).join('') || `<div class="empty">${empty}</div>`) + oldBtn + '</section>';
+      + `<div class="colbody">${list.map(cardHtml).join('') || `<div class="empty">${empty}</div>`}${oldBtn}</div></section>`;
   }).join('');
-  $('#tabs').innerHTML = COLS.map(([k]) => `<button data-s="${k}" class="${mcol === k ? 'on' : ''}">${t('s_' + k)} · ${vis.filter((c) => c.status === k).length}</button>`).join('');
+  $('#tabs').innerHTML = COLS.map(([k]) => `<button data-s="${k}" class="${mcol === k ? 'on' : ''}"><span class="tc">${vis.filter((c) => c.status === k).length}</span><span class="tl">${t('s_' + k)}</span></button>`).join('');
   $$('#tabs button').forEach((b) => (b.onclick = () => { mcol = b.dataset.s; renderBoard(); }));
 }
 function renderAll() { renderFilters(); renderBoard(); renderBell(); }
@@ -478,18 +481,18 @@ function showCard(id, keep) {
   const mine = c.assignees.includes(user.email), owner = c.assignees[0];
   const canEdit = role('admin') || c.reporter === user.email || mine;
   const kids = cards.filter((x) => x.parent === c.id);
-  const acts = [];
+  const prim = [], sec = []; // primary = the next step for this card (sticky bar on phones); secondary = release / edit steps / delete
   if (c.status !== 'complete' && role('dev', 'admin')) {
-    if (mine) acts.push(`<button class="btn" data-a="unclaim">${t('release')}</button>`);
-    else if (!owner) acts.push(`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
-    else if (role('admin')) acts.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other', nameOf(owner))}</button>`);
+    if (mine) sec.push(`<button class="btn" data-a="unclaim">${t('release')}</button>`);
+    else if (!owner) prim.push(`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
+    else if (role('admin')) sec.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other', nameOf(owner))}</button>`);
   }
-  if (c.status === 'ready_to_test' && role('tester', 'admin')) acts.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
-  if (c.status === 'complete' && role('tester', 'admin')) acts.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
+  if (c.status === 'ready_to_test' && role('tester', 'admin')) prim.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
+  if (c.status === 'complete' && role('tester', 'admin')) prim.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
   if (role('dev', 'admin') && (mine || role('admin')) && (c.status === 'in_progress' || c.status === 'ready_to_test')) {
-    acts.unshift(`<button class="btn ${c.status === 'in_progress' ? 'primary' : ''}" data-a="ready">${t(c.status === 'in_progress' ? 'send_test' : 'edit_steps')}</button>`);
+    (c.status === 'in_progress' ? prim : sec).unshift(`<button class="btn ${c.status === 'in_progress' ? 'primary' : ''}" data-a="ready">${t(c.status === 'in_progress' ? 'send_test' : 'edit_steps')}</button>`);
   }
-  if (role('dev', 'admin')) acts.push(`<button class="btn danger" data-a="delete" style="margin-left:auto">🗑 ${t('delete')}</button>`);
+  if (role('dev', 'admin')) sec.push(`<button class="btn danger" data-a="delete">🗑 ${t('delete')}</button>`);
   const files = c.files.map((f) => {
     const vid = f.mime.startsWith('video/');
     const thumbSrc = f.thumb ? `/api/files/${f.id}?thumb=1` : (!f.purged && !vid ? `/api/files/${f.id}` : '');
@@ -502,34 +505,44 @@ function showCard(id, keep) {
       ${mineF || f.pinned ? `<button class="pin${f.pinned ? ' on' : ''}" data-pin="${f.id}" data-on="${f.pinned ? 1 : 0}" title="${t(f.pinned ? 'unpin' : 'pin')}" ${mineF ? '' : 'disabled'}>📌</button>` : ''}
       ${mineF ? `<button class="x" data-rmfile="${f.id}" data-name="${esc(f.name)}" title="${t('remove_file')}">✕</button>` : ''}</div>`;
   }).join('');
+  const stCol = `var(${COLOR[c.status]})`;
   $('#viewBody').innerHTML = `
-    <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id} · ${t('by')} ${esc(nameOf(c.reporter))} · <span class="pri-${c.priority}">${t('pri_' + c.priority)}</span></span>
-      <span class="status" style="margin-left:auto;color:var(${COLOR[c.status]});border:1px solid var(${COLOR[c.status]})">${t('s_' + c.status)}</span></div>
-    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h3 style="word-break:break-word">${esc(c.title)}</h3>
-      <div class="row" style="flex:none">${canEdit ? `<button class="btn" data-a="edit">✎ ${t('edit')}</button>` : ''}<button class="btn" data-a="copytext">${t('copy_text')}</button></div></div>
-    ${c.tags.length || c.due || c.milestone ? `<div class="chiprow" style="margin:0">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}${dueChip(c)}${c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : ''}</div>` : ''}
-    <div class="banner${mine ? ' me' : ''}">${owner ? avatar(owner, 'lg') : '<span class="av lg" style="background:var(--line);color:var(--mute)">?</span>'}
-      <div class="who">${owner ? `<b>${mine ? t('you') : esc(nameOf(owner))}</b><small>${t(c.status === 'complete' ? 'did_it' : 'working')}</small>` : `<span class="meta">${t('noassignee')}</span>`}</div></div>
-    ${c.description ? `<div class="box">${esc(c.description)}</div>` : ''}
-    <div class="sec"><h4>${t('attachments')} ${c.files.length ? `(${c.files.length})` : ''}</h4>
-      ${files ? `<div class="gal">${files}</div>` : ''}
-      <div class="drop" id="drop">${t('drop_hint')} · <a href="#" id="pickFile" style="color:var(--accent)">${t('add_file')}</a>
-        <input type="file" id="fileIn" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm"></div></div>
-    ${c.test_steps.length ? `<div class="sec"><h4>${t('howtest')}</h4>
-      ${c.dev_summary ? `<div class="box testbox" style="margin-bottom:8px">${esc(c.dev_summary)}</div>` : ''}
-      <ol class="steps" style="font-size:14px">${c.test_steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>` : ''}
-    <div class="actions">${acts.join('')}</div>
-    <div class="sec"><h4>${t('links')}</h4>
-      ${c.parent && cards.some((x) => x.id === c.parent) ? `<div class="meta">${t('parent_of')}</div>${linkRow(c.parent, canEdit, 'parent')}` : ''}
-      ${kids.length ? `<div class="meta">${t('subcards')}</div>${kids.map((k) => linkRow(k.id, false)).join('')}` : ''}
-      ${c.related.some((r) => cards.some((x) => x.id === r)) ? `<div class="meta">${t('related')}</div>${c.related.map((r) => linkRow(r, true, 'related')).join('')}` : ''}
-      <div class="row" style="margin-top:6px"><input id="linkId" type="number" min="1" placeholder="${t('add_related')}" style="width:120px"><button class="btn" data-a="link">${t('link')}</button>
-        ${canEdit ? `<input id="parentId" type="number" min="1" placeholder="${t('set_parent')}" style="width:120px;margin-left:8px"><button class="btn" data-a="setparent">${t('save')}</button>` : ''}</div></div>
-    <div class="sec"><h4>${t('comments')}</h4>
-      ${c.comments.map((m) => `<div class="cm"><b>${esc(nameOf(m.user))}</b> ${esc(m.text).replace(/@([\p{L}\p{N}_.\-@]+)/gu, '<span style="color:var(--accent)">@$1</span>')}</div>`).join('') || `<div class="meta">${t('nocomments')}</div>`}
-      <div class="row" style="margin-top:8px;position:relative;flex-wrap:nowrap"><div class="sugg" id="sugg" hidden></div><input id="cmt" placeholder="${esc(t('writecomment'))}" style="flex:1" autocomplete="off"><button class="btn" data-a="comment">${t('send')}</button></div></div>
-    <details class="sec hist"><summary>${t('history')}</summary>${c.history.map((h) => `<div>${new Date(h.at).toLocaleString(locale())} · ${esc(nameOf(h.user))} · ${esc(t('a_' + h.action))} ${esc(h.text)}</div>`).join('')}</details>
-    <div class="actions"><span class="sp"></span><button class="btn" data-a="close">${t('close')}</button></div>`;
+    <button type="button" class="dx" data-a="close" aria-label="Close">✕</button>
+    <div class="dhead"><span class="tag ${c.type}">${c.type}</span><span class="cid">#${c.id}</span><span class="meta">${t('by')} ${esc(nameOf(c.reporter))}</span>
+      <span class="prib pri-${c.priority}" style="margin-left:0">${t('pri_' + c.priority)}</span>
+      <span class="status" style="margin-left:auto;color:${stCol};border:1px solid ${stCol}">${t('s_' + c.status)}</span></div>
+    <div class="dgrid">
+     <div class="dmain">
+      <div class="s-title"><h3>${esc(c.title)}</h3>
+        <div class="row">${canEdit ? `<button class="btn" data-a="edit">✎ ${t('edit')}</button>` : ''}<button class="btn" data-a="copytext">${t('copy_text')}</button></div></div>
+      ${c.tags.length || c.due || c.milestone ? `<div class="chiprow s-chips" style="margin:0">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}${dueChip(c)}${c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : ''}</div>` : ''}
+      ${c.description ? `<div class="box s-desc">${esc(c.description)}</div>` : ''}
+      <div class="sec s-att"><h4>${t('attachments')} ${c.files.length ? `(${c.files.length})` : ''}</h4>
+        ${files ? `<div class="gal">${files}</div>` : ''}
+        <div class="drop" id="drop">${t('drop_hint')} · <a href="#" id="pickFile">${t('add_file')}</a>
+          <input type="file" id="fileIn" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm"></div></div>
+      ${c.test_steps.length ? `<div class="sec s-steps"><h4>${t('howtest')}</h4>
+        ${c.dev_summary ? `<div class="box testbox" style="margin-bottom:10px">${esc(c.dev_summary)}</div>` : ''}
+        <ol class="steps">${c.test_steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>` : ''}
+      <div class="sec s-comments"><h4>${t('comments')}</h4>
+        ${c.comments.map((m) => `<div class="cm"><b>${esc(nameOf(m.user))}</b> ${esc(m.text).replace(/@([\p{L}\p{N}_.\-@]+)/gu, '<span style="color:var(--accent)">@$1</span>')}</div>`).join('') || `<div class="meta">${t('nocomments')}</div>`}
+        <div class="row" style="margin-top:10px;position:relative;flex-wrap:nowrap"><div class="sugg" id="sugg" hidden></div><input id="cmt" placeholder="${esc(t('writecomment'))}" style="flex:1" autocomplete="off"><button class="btn" data-a="comment">${t('send')}</button></div></div>
+     </div>
+     <aside class="dside">
+      <div class="banner s-banner${mine ? ' me' : ''}">${owner ? avatar(owner, 'lg') : '<span class="av lg" style="background:var(--surface3);color:var(--mute)">?</span>'}
+        <div class="who">${owner ? `<b>${mine ? t('you') : esc(nameOf(owner))}</b><small>${t(c.status === 'complete' ? 'did_it' : 'working')}</small>` : `<span class="meta">${t('noassignee')}</span>`}</div></div>
+      <div class="actions sideacts">${prim.join('')}</div>
+      <div class="sec s-links"><h4>${t('links')}</h4>
+        ${c.parent && cards.some((x) => x.id === c.parent) ? `<div class="meta">${t('parent_of')}</div>${linkRow(c.parent, canEdit, 'parent')}` : ''}
+        ${kids.length ? `<div class="meta">${t('subcards')}</div>${kids.map((k) => linkRow(k.id, false)).join('')}` : ''}
+        ${c.related.some((r) => cards.some((x) => x.id === r)) ? `<div class="meta">${t('related')}</div>${c.related.map((r) => linkRow(r, true, 'related')).join('')}` : ''}
+        <div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="linkId" type="number" min="1" placeholder="${t('add_related')}"><button class="btn" data-a="link">${t('link')}</button></div>
+        ${canEdit ? `<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="parentId" type="number" min="1" placeholder="${t('set_parent')}"><button class="btn" data-a="setparent">${t('save')}</button></div>` : ''}</div>
+      <div class="actions sideacts2 s-more">${sec.join('')}</div>
+      <details class="sec hist s-hist"><summary>${t('history')}</summary>${c.history.map((h) => `<div>${new Date(h.at).toLocaleString(locale())} · ${esc(nameOf(h.user))} · ${esc(t('a_' + h.action))} ${esc(h.text)}</div>`).join('')}</details>
+     </aside>
+    </div>
+    <div class="actions foot"><span class="sp"></span><button class="btn" data-a="close">${t('close')}</button></div>`;
   if (draft) $('#cmt').value = draft;
   wireDetail(c);
   if (!keep && !$('#viewDlg').open) $('#viewDlg').showModal();
@@ -798,6 +811,13 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === '?') { e.preventDefault(); $('#helpBtn').click(); }
   else if (k === 'm') $('#needBtn').click();
 });
+// every dialog gets a close (X) button; it behaves exactly like Esc (so unsaved-changes guards still run)
+for (const d of $$('dialog')) {
+  if (d.id === 'loginDlg' || d.id === 'lbDlg' || d.id === 'viewDlg') continue; // (viewDlg re-renders; its X is part of the template)
+  const x = document.createElement('button'); x.type = 'button'; x.className = 'dx'; x.setAttribute('aria-label', 'Close'); x.textContent = '✕';
+  x.onclick = () => { const ev = new Event('cancel', { cancelable: true }); d.dispatchEvent(ev); if (!ev.defaultPrevented) d.close(); };
+  (d.querySelector('.dlg') || d).prepend(x);
+}
 // phones: the secondary header controls and the filter selects fold away
 $('#hamb').onclick = () => { const o = $('#hx').classList.toggle('open'); $('#hamb').setAttribute('aria-expanded', o); };
 $('#fToggle').onclick = () => { const o = $('#fsel').classList.toggle('open'); $('#fToggle').setAttribute('aria-expanded', o); };

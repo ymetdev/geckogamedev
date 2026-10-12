@@ -48,7 +48,8 @@ Token ส่วนตัวสำหรับ MCP ดูได้ที่เม
 1. ใน Discord: ตั้งค่าช่อง → Integrations → Webhooks → New Webhook → Copy Webhook URL
 2. ตั้ง env `DISCORD_WEBHOOK_URL` (บน Render: Environment) แล้ว redeploy
 3. (ไม่บังคับ) `DISCORD_LANG=en` ถ้าอยากให้ข้อความเป็นอังกฤษ (ค่าเริ่มต้นคือไทย)
-4. ระบบจะส่งข้อความเมื่อ: พร้อมเทส / เทสไม่ผ่าน / เสร็จสิ้น / มีการ @แท็กคนในคอมเมนต์ พร้อมลิงก์เปิดการ์ด
+4. (ไม่บังคับ) แท็ก role เมื่อพร้อมเทส: ใน Discord เปิด Developer Mode → คลิกขวาที่ role (เช่น GameTester) → Copy Role ID แล้วตั้ง env `DISCORD_TESTER_ROLE_ID` (role ต้องเปิด "Allow anyone to @mention this role")
+5. ระบบจะส่งข้อความเมื่อ: พร้อมเทส / เทสไม่ผ่าน / เสร็จสิ้น / มีการ @แท็กคนในคอมเมนต์ พร้อมลิงก์เปิดการ์ด
    (ลิงก์ใช้ `PUBLIC_URL` หรือ `RENDER_EXTERNAL_URL` ที่ Render ตั้งให้อยู่แล้ว)
 
 ## ไฟล์แนบ + ระบบรีไซเคิลพื้นที่
