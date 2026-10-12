@@ -106,13 +106,13 @@ const forbid = (user, ...roles) => need(can(user, ...roles), 403, `Role "${user.
 const nameOfUser = (email) => db.users.find((u) => u.email === email)?.name || email;
 // Discord webhook (fire-and-forget; never blocks or breaks the request). Language: DISCORD_LANG=th|en (default th)
 const DLANG = (process.env.DISCORD_LANG || 'th') === 'en' ? 'en' : 'th';
-const COLORS = { ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ade80, mention: 0x7c8cff };
+const COLORS = { ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ade80, mention: 0x7c8cff, deleted: 0x6b7280 };
 const DTXT = {
-  en: { ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned',
+  en: { ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned', deleted: '🗑 Card deleted',
     dev: 'Dev', by: 'By', type: 'Type', priority: 'Priority', due: 'Due', ms: 'Milestone', tags: 'Tags', desc: 'Description', summary: 'What was done', steps: 'How to test',
     more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
     st: { open: 'Open', in_progress: 'In Progress', ready_to_test: 'Ready to Test', complete: 'Complete' }, pri: { low: 'low', medium: 'medium', high: 'high', critical: 'critical' } },
-  th: { ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ',
+  th: { ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ', deleted: '🗑 ลบการ์ดแล้ว',
     dev: 'Dev', by: 'โดย', type: 'ประเภท', priority: 'ความสำคัญ', due: 'กำหนดส่ง', ms: 'Milestone', tags: 'Tag', desc: 'รายละเอียด', summary: 'สิ่งที่ทำ', steps: 'วิธีเทส',
     more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
     st: { open: 'เปิด', in_progress: 'กำลังทำ', ready_to_test: 'พร้อมเทส', complete: 'เสร็จสิ้น' }, pri: { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สูง', critical: 'วิกฤต' } },
@@ -144,11 +144,11 @@ function notify(event, card, actor, text = '') {
     fields.push({ name: DTXT.comment, value: cut(text, 500), inline: false });
   }
   if (card.description && event !== 'ready_to_test') fields.push({ name: DTXT.desc, value: cut(card.description, 250), inline: false });
-  if (url) fields.push({ name: '\u200b', value: `**[${DTXT.open}](${url})**`, inline: false });
+  if (url && event !== 'deleted') fields.push({ name: '\u200b', value: `**[${DTXT.open}](${url})**`, inline: false });
   const embed = {
     author: { name: DTXT[event] },
     title: cut(`#${card.id} · ${card.title}`, 250),
-    url: url || undefined,
+    url: event === 'deleted' ? undefined : (url || undefined),
     color: COLORS[event], fields,
     footer: { text: 'GeckoBoard' }, timestamp: new Date().toISOString(),
   };
@@ -373,7 +373,8 @@ async function api(req, res, url) {
 
   if (!action && method === 'GET') return sendJson(res, 200, card);
   if (!action && method === 'DELETE') {
-    forbid(me, 'admin');
+    forbid(me, 'admin', 'dev');
+    notify('deleted', card, user); // the team sees who deleted what
     for (const f of card.files) await delFile(f.id);
     for (const c of db.cards) { c.related = c.related.filter((r) => r !== card.id); if (c.parent === card.id) c.parent = card.parent; }
     db.cards = db.cards.filter((c) => c.id !== card.id);

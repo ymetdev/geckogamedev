@@ -44,6 +44,7 @@ en: {
   a_created: 'created', a_claimed: 'claimed', a_unclaimed: 'released', a_ready_to_test: 'marked ready to test', a_complete: 'passed (complete)', a_test_failed: 'test failed',
   a_reopened: 'reopened', a_commented: 'commented', a_edited: 'edited', a_file_added: 'attached', a_file_removed: 'removed file', a_linked: 'linked', a_unlinked: 'unlinked',
   tab_filters: 'Filters',
+  send_test: '➡ Send to Ready to Test', edit_steps: '✎ Edit test steps', ready_title: 'Send to Ready to Test', ready_sub: 'What was done (short)', ready_steps: 'How to test: one step per line (expected result at the end)', ready_hint: 'The tester will tick these steps one by one, so make each one clear.', ready_need: 'Add at least one test step', send: 'Send', move_not_yours: 'Only the owner of the card can send it to testing',
 },
 th: {
   all: 'ทั้งหมด', tickets: 'Tickets', tasks: 'Tasks', everyone: 'ทุกคน', mine: 'ของฉัน', unassigned: 'ยังไม่มีคนรับ', help: '? วิธีใช้', new: '+ สร้างการ์ด',
@@ -83,5 +84,6 @@ th: {
   a_created: 'สร้างการ์ด', a_claimed: 'รับงาน', a_unclaimed: 'ปล่อยการ์ด', a_ready_to_test: 'ส่งพร้อมเทส', a_complete: 'เทสผ่าน (เสร็จสิ้น)', a_test_failed: 'เทสไม่ผ่าน',
   a_reopened: 'เปิดใหม่', a_commented: 'คอมเมนต์', a_edited: 'แก้ไข', a_file_added: 'แนบไฟล์', a_file_removed: 'ลบไฟล์', a_linked: 'ลิงก์การ์ด', a_unlinked: 'เลิกลิงก์',
   tab_filters: 'ตัวกรอง',
+  send_test: '➡ ส่งไปพร้อมเทส', edit_steps: '✎ แก้วิธีเทส', ready_title: 'ส่งไปพร้อมเทส', ready_sub: 'สิ่งที่ทำ (สั้นๆ)', ready_steps: 'วิธีเทส: บรรทัดละ 1 ขั้น (ใส่ผลที่คาดหวังท้ายข้อ)', ready_hint: 'Tester จะติ๊กทีละข้อ ควรเขียนให้ชัดเจนทีละขั้น', ready_need: 'ใส่วิธีเทสอย่างน้อย 1 ข้อ', move_not_yours: 'เฉพาะเจ้าของการ์ดเท่านั้นที่ส่งไปเทสได้',
 },
 };

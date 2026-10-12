@@ -290,7 +290,8 @@ async function moveCard(c, to) {
     } else if (from === 'ready_to_test' && to === 'in_progress' && role('tester', 'admin')) {
       const text = prompt(t('failprompt')); if (!text) return; await api('POST', `/cards/${c.id}/fail`, { text });
     } else if (from === 'complete' && (to === 'open' || to === 'in_progress') && role('tester', 'admin')) await api('POST', `/cards/${c.id}/reopen`, {});
-    else if (to === 'ready_to_test') return toast(t('move_needs_steps'));
+    else if (from === 'in_progress' && to === 'ready_to_test' && role('dev', 'admin')) { if (mine || role('admin')) return openReadyDlg(c); return toast(t('move_not_yours')); }
+    else if (to === 'ready_to_test') return toast(t('move_no'));
     else return toast(t('move_no'));
   } catch (err) { toast(err.data?.claimed_by ? t('already', nameOf(err.data.claimed_by)) : err.message); }
   await load();
@@ -326,7 +327,10 @@ function showCard(id, keep) {
   const allTicked = c.test_steps.length && c.test_checks.length === c.test_steps.length && c.test_checks.every(Boolean);
   if (c.status === 'ready_to_test' && role('tester', 'admin')) acts.push(`<button class="btn ok" data-a="pass" ${allTicked ? '' : 'disabled style="opacity:.5" title="' + esc(t('must_tick')) + '"'}>${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
   if (c.status === 'complete' && role('tester', 'admin')) acts.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
-  if (role('admin')) acts.push(`<button class="btn danger" data-a="delete" style="margin-left:auto">🗑 ${t('delete')}</button>`);
+  if (role('dev', 'admin') && (mine || role('admin')) && (c.status === 'in_progress' || c.status === 'ready_to_test')) {
+    acts.unshift(`<button class="btn ${c.status === 'in_progress' ? 'primary' : ''}" data-a="ready">${t(c.status === 'in_progress' ? 'send_test' : 'edit_steps')}</button>`);
+  }
+  if (role('dev', 'admin')) acts.push(`<button class="btn danger" data-a="delete" style="margin-left:auto">🗑 ${t('delete')}</button>`);
   const canTick = c.status === 'ready_to_test' && role('tester', 'admin');
   const files = c.files.map((f) => `<div class="thumb">${f.mime.startsWith('video/') ? `<video src="/api/files/${f.id}" controls preload="metadata"></video>` : `<img src="/api/files/${f.id}" alt="${esc(f.name)}" data-lb="${f.id}" loading="lazy">`}${(role('admin') || f.by === user.email) ? `<button class="x" data-rmfile="${f.id}" data-name="${esc(f.name)}" title="${t('remove_file')}">✕</button>` : ''}</div>`).join('');
   $('#viewBody').innerHTML = `
@@ -401,8 +405,23 @@ document.addEventListener('paste', (e) => { // Ctrl+V a screenshot while a card 
   e.preventDefault();
   toast(t('uploading')); attach(openId, files.map((f, i) => (f.name && f.name !== 'image.png' ? f : new File([f], `screenshot-${Date.now()}-${i}.png`, { type: f.type })))).then(load);
 });
+let readyFor = null;
+function openReadyDlg(c) {
+  readyFor = c; const f = $('#readyForm'); f.reset(); $('#readyErr').textContent = '';
+  f.summary.value = c.dev_summary || ''; f.steps.value = c.test_steps.join('\n');
+  $('#readyDlg').showModal(); f.steps.focus();
+}
+$('#readyCancel').onclick = () => $('#readyDlg').close();
+$('#readyForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const steps = e.target.steps.value.split('\n').map((x) => x.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
+  if (!steps.length) { $('#readyErr').textContent = t('ready_need'); return; }
+  try { await api('POST', `/cards/${readyFor.id}/ready`, { summary: e.target.summary.value, test_steps: steps }); $('#readyDlg').close(); await load(); }
+  catch (err) { $('#readyErr').textContent = err.message; }
+});
 async function act(c, a, btn) {
   if (a === 'close') return $('#viewDlg').close();
+  if (a === 'ready') return openReadyDlg(c);
   if (a === 'edit') return openCardDlg(c);
   if (a === 'copytext') return copyText(mdText(c), btn, 'copy_text');
   try {

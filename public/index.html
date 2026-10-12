@@ -259,6 +259,7 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li>เปิด Claude Code <b>ในโฟลเดอร์โค้ดเกม</b> แล้วพิมพ์ เช่น
         <ul><li><code>ทำการ์ด GeckoBoard ที่ฉันรับไว้ทั้งหมด</code> (หลายใบ)</li><li><code>ทำการ์ด #12 ให้หน่อย</code> (ใบเดียว)</li></ul></li>
       <li>Claude จะอ่านการ์ด แก้โค้ด แล้วย้ายการ์ดไป <b>พร้อมเทส</b> พร้อมสรุปและวิธีเทสให้ Tester</li>
+      <li>ถ้าไม่ใช้ Claude: เปิดการ์ดแล้วกด <b>➡ ส่งไปพร้อมเทส</b> (หรือลากการ์ดไปคอลัมน์พร้อมเทส) แล้วกรอกสิ่งที่ทำกับวิธีเทสให้ Tester ได้เอง</li>
       <li>ตรวจโค้ดที่ Claude แก้ก่อน commit (Claude ไม่ commit/push เองถ้าไม่สั่ง)</li>
       <li>ถ้า Tester ตีกลับ ให้สั่งใหม่ เช่น <code>ทำการ์ด #12 ใหม่ ดูคอมเมนต์ที่ tester ทิ้งไว้</code></li></ol>
       <div class="note">ติดงานไม่ไหว? กด <b>ปล่อยการ์ด</b> เพื่อให้คนอื่นรับต่อ</div></details>
@@ -273,7 +274,7 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li>เพิ่มคนใหม่ด้วยอีเมล Google + เลือก role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
       <li>คนที่ไม่อยู่ในรายชื่อจะ login ไม่ได้ เปลี่ยน role หรือลบคนออกได้ในหน้าเดียวกัน</li>
       <li>ถ้าคนรับงานไปแล้วทำไม่ได้ เปิดการ์ดแล้วกด <b>ปล่อยการ์ดจาก …</b> เพื่อดึงคืน</li>
-      <li>ลบการ์ด: เปิดการ์ด แล้วกด <b>🗑 ลบการ์ด</b> (เฉพาะ admin ลบแล้วกู้คืนไม่ได้)</li></ol></details>
+      </ol></details>
     <details><summary>ฟีเจอร์อื่นๆ</summary><ul>
       <li><b>ลากการ์ด</b>ข้ามคอลัมน์ได้: เปิด→กำลังทำ (รับงาน), กำลังทำ→เปิด (ปล่อย), พร้อมเทส→เสร็จสิ้น หรือกลับไปกำลังทำ (Tester)</li>
       <li><b>ค้นหา/กรอง</b> ที่แถบใต้หัวเว็บ: ค้นหา ความสำคัญ tag คนรับ milestone</li>
@@ -284,9 +285,9 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li><b>แจ้งเตือน Discord</b> เมื่อพร้อมเทส / เทสไม่ผ่าน / เสร็จสิ้น / ถูกแท็ก (เมื่อ admin ตั้งค่าไว้)</li>
       <li><b>คัดลอกเป็นข้อความ</b> ในหน้าการ์ด เพื่อส่งต่อให้คนนอกระบบ · <b>📊 สรุป</b> ดูภาพรวมของทีม</li></ul></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
-      <li><b>dev</b>: รับ/ปล่อยการ์ด ส่งพร้อมเทส (ผ่าน Claude)</li>
+      <li><b>dev</b>: สร้าง/ลบการ์ด รับ/ปล่อยการ์ด ส่งพร้อมเทส (เอง หรือผ่าน Claude)</li>
       <li><b>tester</b>: ผ่าน / ไม่ผ่าน / เปิดใหม่</li>
-      <li><b>admin</b>: ทำได้ทุกอย่าง + จัดการทีม + ลบการ์ด</li>
+      <li><b>admin</b>: ทำได้ทุกอย่าง + จัดการทีม</li>
       <li>ทุก role สร้างการ์ดและคอมเมนต์ได้</li></ul></details>
   </div>
 
@@ -307,6 +308,7 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li>Open Claude Code <b>inside the game's code folder</b> and type, for example
         <ul><li><code>Do all the GeckoBoard cards I claimed</code> (multiple)</li><li><code>Do GeckoBoard card #12</code> (single)</li></ul></li>
       <li>Claude reads the card, fixes the code, then moves it to <b>Ready to Test</b> with a summary and test steps for the tester</li>
+      <li>Not using Claude? Open the card and click <b>➡ Send to Ready to Test</b> (or drag it to the Ready to Test column) and fill in what you did and the test steps yourself</li>
       <li>Review the code Claude changed before committing (Claude won't commit/push unless you ask)</li>
       <li>If the tester sends it back, ask again, e.g. <code>Redo GeckoBoard card #12, see the tester's comment</code></li></ol>
       <div class="note">Stuck? Click <b>Release</b> so someone else can take the card</div></details>
@@ -321,7 +323,7 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li>Add people by Google email and choose a role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
       <li>People not on the list can't sign in. Change roles or remove people on the same screen</li>
       <li>If the owner can't finish, open the card and click <b>Release from …</b> to take it back</li>
-      <li>Delete a card: open it and click <b>🗑 Delete</b> (admin only, cannot be undone)</li></ol></details>
+      </ol></details>
     <details><summary>More features</summary><ul>
       <li><b>Drag cards</b> between columns: Open→In Progress (claim), In Progress→Open (release), Ready to Test→Complete or back to In Progress (testers)</li>
       <li><b>Search / filter</b> in the bar under the header: search, priority, tag, owner, milestone</li>
@@ -332,13 +334,22 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li><b>Discord alerts</b> on ready to test / test failed / complete / mentions (when an admin has set it up)</li>
       <li><b>Copy as text</b> in the card to share outside the tool · <b>📊 Summary</b> for the team overview</li></ul></details>
     <details><summary>What can each role do?</summary><ul>
-      <li><b>dev</b>: claim/release cards, send to Ready to Test (via Claude)</li>
+      <li><b>dev</b>: create/delete cards, claim/release, send to Ready to Test (by hand or via Claude)</li>
       <li><b>tester</b>: Pass / Fail / Reopen</li>
-      <li><b>admin</b>: everything + manage the team + delete cards</li>
+      <li><b>admin</b>: everything + manage the team</li>
       <li>Every role can create cards and comment</li></ul></details>
   </div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#helpDlg').close()" data-i18n="close"></button></div>
 </div></dialog>
+
+<dialog id="readyDlg"><form class="dlg" id="readyForm">
+  <h3 data-i18n="ready_title"></h3>
+  <label><span data-i18n="ready_sub"></span><textarea name="summary" style="min-height:70px"></textarea></label>
+  <label><span data-i18n="ready_steps"></span><textarea name="steps" required style="min-height:130px"></textarea></label>
+  <div class="meta" data-i18n="ready_hint"></div>
+  <div class="err" id="readyErr"></div>
+  <div class="actions"><span class="sp"></span><button type="button" class="btn" id="readyCancel" data-i18n="cancel"></button><button class="btn primary" data-i18n="send"></button></div>
+</form></dialog>
 
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
 <dialog id="sumDlg"><div class="dlg"><h3 data-i18n="summary"></h3><div id="sumBody" class="help" style="max-height:72vh"></div>
