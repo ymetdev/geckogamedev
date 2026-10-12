@@ -203,7 +203,10 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
     <label style="flex:1"><span data-i18n="parent_label"></span><input name="parent" type="number" min="1"></label>
   </div>
   <datalist id="msList"></datalist>
-  <label id="newFilesRow"><span data-i18n="attach_files"></span><input id="newFiles" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm"></label>
+  <div id="newFilesRow" style="display:flex;flex-direction:column;gap:6px"><span class="meta" data-i18n="attach_files"></span>
+    <div class="drop" id="newDrop" style="margin:0"><span data-i18n="paste_hint"></span> · <a href="#" id="newPick" style="color:var(--accent)" data-i18n="add_file_short"></a>
+      <input id="newFiles" type="file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm"></div>
+    <div class="gal" id="pendingBox"></div></div>
   <div class="err" id="cardErr"></div>
   <div class="actions"><span class="sp"></span><button class="btn" value="cancel" formnovalidate data-i18n="cancel"></button><button class="btn primary" value="ok" id="cardSubmit"></button></div>
 </form></dialog>
@@ -285,7 +288,8 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
     <details><summary>ฟีเจอร์อื่นๆ</summary><ul>
       <li><b>ลากการ์ด</b>ข้ามคอลัมน์ได้: เปิด→กำลังทำ (รับงาน), กำลังทำ→เปิด (ปล่อย), พร้อมเทส→เสร็จสิ้น หรือกลับไปกำลังทำ (Tester)</li>
       <li><b>ค้นหา/กรอง</b> ที่แถบใต้หัวเว็บ: ค้นหา ความสำคัญ tag คนรับ milestone</li>
-      <li><b>ไฟล์แนบ</b>: เปิดการ์ด แล้วลากไฟล์มาวาง หรือกด Ctrl+V วางรูปจากคลิปบอร์ด รูปจะถูกย่อให้อัตโนมัติ และ Claude ดูรูปได้ผ่าน MCP · ไฟล์ต้นฉบับของงานที่เสร็จนานแล้วจะถูก<b>รีไซเคิลอัตโนมัติ</b>เมื่อพื้นที่ใกล้เต็ม (เหลือรูปตัวอย่างไว้) กด 📌 เพื่อปักหมุดไฟล์สำคัญ</li>
+      <li><b>วางรูปได้ทุกที่</b>: แคปหน้าจอแล้วกด Ctrl+V ที่หน้าบอร์ดเพื่อสร้างการ์ดใหม่พร้อมรูป หรือวางตอนเปิดการ์ด/ฟอร์มสร้างการ์ดเพื่อแนบเพิ่ม วางได้หลายรูป (สูงสุด 20 ไฟล์ต่อการ์ด)</li>
+      <li><b>ไฟล์แนบ</b>: ลากไฟล์มาวางในการ์ดก็ได้ รูปจะถูกย่อให้อัตโนมัติ และ Claude ดูรูปได้ผ่าน MCP · ไฟล์ต้นฉบับของงานที่เสร็จนานแล้วจะถูก<b>รีไซเคิลอัตโนมัติ</b>เมื่อพื้นที่ใกล้เต็ม (เหลือรูปตัวอย่างไว้) กด 📌 เพื่อปักหมุดไฟล์สำคัญ</li>
       <li><b>วันกำหนดส่ง / Milestone</b> ตั้งตอนสร้างหรือแก้ไขการ์ด ใบที่เลยกำหนดจะขึ้นสีแดง</li>
       <li><b>ลิงก์การ์ด</b>: ตั้งการ์ดแม่/การ์ดย่อย หรือเชื่อมการ์ดที่เกี่ยวข้องกัน</li>
       <li><b>แท็กคน</b>ในคอมเมนต์ด้วย <code>@ชื่อ</code> และกระดิ่ง 🔔 สรุปสิ่งที่เกี่ยวกับคุณ</li>
@@ -334,7 +338,8 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
     <details><summary>More features</summary><ul>
       <li><b>Drag cards</b> between columns: Open→In Progress (claim), In Progress→Open (release), Ready to Test→Complete or back to In Progress (testers)</li>
       <li><b>Search / filter</b> in the bar under the header: search, priority, tag, owner, milestone</li>
-      <li><b>Attachments</b>: open a card, then drop files or press Ctrl+V to paste an image. Images are shrunk automatically and Claude can look at them through MCP · Originals of long-finished cards are <b>recycled automatically</b> when space runs low (a preview is kept). Pin 📌 important files</li>
+      <li><b>Paste images anywhere</b>: take a screenshot, then press Ctrl+V on the board to start a new card with it, or paste while a card / the new-card form is open to attach more. Several images at once are fine (up to 20 files per card)</li>
+      <li><b>Attachments</b>: you can also drop files onto a card. Images are shrunk automatically and Claude can look at them through MCP · Originals of long-finished cards are <b>recycled automatically</b> when space runs low (a preview is kept). Pin 📌 important files</li>
       <li><b>Due date / Milestone</b> when creating or editing a card. Overdue cards turn red</li>
       <li><b>Links</b>: set a parent / sub-cards, or link related cards</li>
       <li><b>Mention people</b> in comments with <code>@name</code>; the 🔔 bell summarises what concerns you</li>

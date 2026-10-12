@@ -70,9 +70,11 @@ async function shrinkImage(file) { // screenshots: downscale to 1600px JPEG so t
     return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
   } catch { return file; }
 }
+const MAX_FILES = 20;
 async function attach(cardId, files) {
-  let ok = 0;
+  let ok = 0, i = 0;
   for (const f0 of files) {
+    if (files.length > 1) toast(t('uploading_n', ++i, files.length));
     const f = await shrinkImage(f0);
     if (!LIMITS[f.type]) { toast(t('file_type', f0.name)); continue; }
     if (f.size > LIMITS[f.type]) { toast(t('file_too_big', f0.name)); continue; }
@@ -442,12 +444,14 @@ function wireDetail(c) {
   cmt.onblur = () => setTimeout(() => (sg.hidden = true), 150);
   cmt.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); act(c, 'comment'); } };
 }
-document.addEventListener('paste', (e) => { // Ctrl+V a screenshot while a card is open
-  if (!$('#viewDlg').open || !openId) return;
-  const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
-  if (!files.length) return;
-  e.preventDefault();
-  toast(t('uploading')); attach(openId, files.map((f, i) => (f.name && f.name !== 'image.png' ? f : new File([f], `screenshot-${Date.now()}-${i}.png`, { type: f.type })))).then(load);
+// Ctrl+V a screenshot (or several): into the open form/card, or anywhere on the board to start a new card with it
+document.addEventListener('paste', (e) => {
+  const files = imagesFrom(e.clipboardData).map(named);
+  if (!files.length || !user) return;
+  if ($('#cardDlg').open) { e.preventDefault(); if (editId) { toast(t('uploading')); attach(editId, files).then(load); } else addPending(files); return; }
+  if ($('#viewDlg').open && openId) { e.preventDefault(); toast(t('uploading')); attach(openId, files).then(load); return; }
+  if ($$('dialog[open]').length) return; // some other dialog (login, team...) is open
+  e.preventDefault(); openCardDlg(null); addPending(files); // pasted on the board: new card with the image(s)
 });
 let readyFor = null;
 function openReadyDlg(c) {
@@ -492,9 +496,26 @@ $('#viewDlg').addEventListener('close', () => { openId = null; if (location.hash
 $('#lbDlg').addEventListener('click', () => $('#lbDlg').close());
 
 // ---------- create / edit dialog ----------
-let editId = null;
+let editId = null, pending = [];
+const imagesFrom = (dt) => [...(dt?.files || [])].filter((f) => /^(image\/(png|jpeg|gif|webp)|video\/(mp4|webm))$/.test(f.type));
+const named = (f, i) => (f.name && f.name !== 'image.png' ? f : new File([f], `screenshot-${Date.now()}-${i}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type }));
+function renderPending() {
+  $('#pendingBox').innerHTML = pending.map((f, i) => `<div class="thumb">${f.type.startsWith('image/') ? `<img src="${URL.createObjectURL(f)}" alt="">` : '<div class="ph">🎞</div>'}<button type="button" class="x" data-rm="${i}">✕</button></div>`).join('');
+  $$('#pendingBox [data-rm]').forEach((b) => (b.onclick = () => { pending.splice(+b.dataset.rm, 1); renderPending(); }));
+}
+function addPending(files) {
+  const room = MAX_FILES - pending.length;
+  if (files.length > room) toast(t('max_files', MAX_FILES));
+  pending.push(...files.slice(0, Math.max(0, room)).map(named)); renderPending();
+  toast(t('pasted_n', Math.min(files.length, Math.max(0, room))));
+}
+$('#newPick').onclick = (e) => { e.preventDefault(); $('#newFiles').click(); };
+$('#newFiles').onchange = () => { addPending([...$('#newFiles').files]); $('#newFiles').value = ''; };
+$('#newDrop').ondragover = (e) => { e.preventDefault(); $('#newDrop').classList.add('over'); };
+$('#newDrop').ondragleave = () => $('#newDrop').classList.remove('over');
+$('#newDrop').ondrop = (e) => { e.preventDefault(); $('#newDrop').classList.remove('over'); addPending([...e.dataTransfer.files]); };
 function openCardDlg(c) {
-  editId = c ? c.id : null;
+  editId = c ? c.id : null; pending = []; renderPending();
   const f = $('#cardForm'); f.reset(); $('#cardErr').textContent = '';
   $('#cardDlgTitle').textContent = t(c ? 'edit_card' : 'newcard'); $('#cardSubmit').textContent = t(c ? 'save' : 'create');
   $('#newFilesRow').hidden = !!c;
@@ -509,7 +530,7 @@ $('#cardForm').addEventListener('submit', async (e) => {
   try {
     let card;
     if (editId) card = await api('PATCH', '/cards/' + editId, f);
-    else { card = await api('POST', '/cards', f); const files = [...$('#newFiles').files]; if (files.length) { toast(t('uploading')); await attach(card.id, files); } }
+    else { card = await api('POST', '/cards', f); if (pending.length) { toast(t('uploading')); await attach(card.id, pending); pending = []; } }
     $('#cardDlg').close(); await load(); if (editId) showCard(editId, true);
   } catch (err) { $('#cardErr').textContent = err.message; }
 });

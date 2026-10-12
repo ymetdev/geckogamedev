@@ -20,7 +20,7 @@ const FILE_TYPES = { // allowed attachments: mime -> max bytes
   'image/png': 6e6, 'image/jpeg': 6e6, 'image/gif': 8e6, 'image/webp': 6e6,
   'video/mp4': 12e6, 'video/webm': 12e6,
 };
-const MAX_FILES_PER_CARD = 8;
+const MAX_FILES_PER_CARD = 20;
 // Recycling policy: originals are purged (thumbnails stay) when storage nears the budget or a finished card gets old
 const FILE_BUDGET = Math.round(Number(process.env.FILE_BUDGET_MB || 300) * 1e6);
 const FILE_KEEP_DAYS = Number(process.env.FILE_KEEP_DAYS || 14);
