@@ -32,10 +32,29 @@ async function api(method, path, body) {
   if (!r.ok) { const er = new Error(d.error || r.status); er.data = d; throw er; }
   return d;
 }
+async function makeThumb(file) { // small JPEG preview kept forever, even after the original is recycled
+  try {
+    let src, w, h, url;
+    if (file.type.startsWith('image/')) { src = await createImageBitmap(file); w = src.width; h = src.height; }
+    else if (file.type.startsWith('video/')) {
+      const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = url = URL.createObjectURL(file);
+      await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = no; setTimeout(no, 6000); });
+      v.currentTime = Math.min(0.5, (v.duration || 1) / 2);
+      await new Promise((ok) => { v.onseeked = ok; setTimeout(ok, 2500); });
+      src = v; w = v.videoWidth; h = v.videoHeight;
+    } else return null;
+    const k = Math.min(1, 320 / Math.max(w, h)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height); g.drawImage(src, 0, 0, c.width, c.height);
+    if (url) URL.revokeObjectURL(url);
+    return await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.7));
+  } catch { return null; }
+}
 async function uploadFile(cardId, file) {
   const r = await fetch(`/api/cards/${cardId}/files`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) }, body: file });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || r.status);
+  const nf = d.files.at(-1);
+  if (nf && !nf.thumb) { const tb = await makeThumb(file); if (tb) await fetch(`/api/cards/${cardId}/files/${nf.id}/thumb`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: tb }).catch(() => {}); }
   return d;
 }
 const LIMITS = { 'image/png': 6e6, 'image/jpeg': 6e6, 'image/gif': 8e6, 'image/webp': 6e6, 'video/mp4': 12e6, 'video/webm': 12e6 };
@@ -97,7 +116,7 @@ function renderUserBox() {
   $('#userBox').innerHTML = `<div class="chip" id="chip"><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
    <div class="menu" id="menu">
      <button data-m="token">${t('menu_token')}</button>
-     ${u.role === 'admin' ? `<button data-m="team">${t('menu_team')}</button>` : ''}
+     ${u.role === 'admin' ? `<button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button>` : ''}
      <button data-m="out">${t('menu_out')}</button></div>`;
   $('#chip').onclick = (e) => { e.stopPropagation(); $('#menu').classList.toggle('show'); };
   $$('#menu button').forEach((b) => (b.onclick = () => menuAct(b.dataset.m)));
@@ -125,6 +144,7 @@ async function menuAct(m) {
   if (m === 'out') { await api('POST', '/logout', {}); showLogin(); }
   if (m === 'token') { const me = await api('GET', '/me'); showToken(me.token); $('#tokenDlg').showModal(); }
   if (m === 'team') { renderTeam(); $('#teamDlg').showModal(); }
+  if (m === 'storage') { await renderStorage(); $('#storDlg').showModal(); }
 }
 function renderTeam() {
   $('#teamList').innerHTML = users.map((u) => `<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span>
@@ -143,6 +163,17 @@ $('#addUserForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   try { await api('POST', '/users', Object.fromEntries(new FormData(e.target))); e.target.reset(); $('#teamErr').textContent = ''; await load(); renderTeam(); } catch (err) { $('#teamErr').textContent = err.message; }
 });
+const fmtB = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.round(n / 1e3) + ' KB');
+async function renderStorage() {
+  const s = await api('GET', '/storage'); const pct = Math.min(100, Math.round(100 * s.used / s.budget));
+  $('#storBody').innerHTML = `<div><b style="font-size:18px">${t('storage_used', fmtB(s.used), fmtB(s.budget))}</b> <span class="meta">(${pct}%)</span></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="meta">${t('storage_files', s.files, s.purged, s.pinned)}</div>
+    <div class="meta">${t('storage_policy', s.keepDays)}</div>`;
+}
+$('#storClean').onclick = async () => {
+  try { const r = await api('POST', '/storage/recycle', {}); await renderStorage(); await load(); toast(r.purged ? t('cleaned', fmtB(r.freed)) : t('nothing_to_clean')); } catch (e) { toast(e.message); }
+};
 let cfg = null;
 async function initLogin() {
   cfg = cfg || await api('GET', '/config');
@@ -332,7 +363,18 @@ function showCard(id, keep) {
   }
   if (role('dev', 'admin')) acts.push(`<button class="btn danger" data-a="delete" style="margin-left:auto">🗑 ${t('delete')}</button>`);
   const canTick = c.status === 'ready_to_test' && role('tester', 'admin');
-  const files = c.files.map((f) => `<div class="thumb">${f.mime.startsWith('video/') ? `<video src="/api/files/${f.id}" controls preload="metadata"></video>` : `<img src="/api/files/${f.id}" alt="${esc(f.name)}" data-lb="${f.id}" loading="lazy">`}${(role('admin') || f.by === user.email) ? `<button class="x" data-rmfile="${f.id}" data-name="${esc(f.name)}" title="${t('remove_file')}">✕</button>` : ''}</div>`).join('');
+  const files = c.files.map((f) => {
+    const vid = f.mime.startsWith('video/');
+    const thumbSrc = f.thumb ? `/api/files/${f.id}?thumb=1` : (!f.purged && !vid ? `/api/files/${f.id}` : '');
+    let media;
+    if (f.purged) media = thumbSrc ? `<img src="${thumbSrc}" class="gone" alt="${esc(f.name)}" data-gone="1" loading="lazy">` : `<div class="ph" data-gone="1">${vid ? '🎞' : '🖼'}</div>`;
+    else if (vid) media = `<video src="/api/files/${f.id}" ${thumbSrc ? `poster="${thumbSrc}"` : ''} controls preload="none"></video>`;
+    else media = `<img src="${thumbSrc}" alt="${esc(f.name)}" data-lb="${f.id}" loading="lazy">`;
+    const mineF = role('admin') || f.by === user.email;
+    return `<div class="thumb" title="${esc(f.name)}">${media}${f.purged ? `<span class="rec">♻ ${t('recycled')}</span>` : ''}
+      ${mineF || f.pinned ? `<button class="pin${f.pinned ? ' on' : ''}" data-pin="${f.id}" data-on="${f.pinned ? 1 : 0}" title="${t(f.pinned ? 'unpin' : 'pin')}" ${mineF ? '' : 'disabled'}>📌</button>` : ''}
+      ${mineF ? `<button class="x" data-rmfile="${f.id}" data-name="${esc(f.name)}" title="${t('remove_file')}">✕</button>` : ''}</div>`;
+  }).join('');
   $('#viewBody').innerHTML = `
     <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id} · ${t('by')} ${esc(nameOf(c.reporter))} · <span class="pri-${c.priority}">${t('pri_' + c.priority)}</span></span>
       <span class="status" style="margin-left:auto;color:var(${COLOR[c.status]});border:1px solid var(${COLOR[c.status]})">${t('s_' + c.status)}</span></div>
@@ -376,7 +418,9 @@ function wireDetail(c) {
     try { if (b.dataset.kind === 'parent') await api('PATCH', `/cards/${c.id}`, { parent: null }); else await api('POST', `/cards/${c.id}/unlink`, { id: +b.dataset.unlink }); await load(); } catch (e) { toast(e.message); }
   }));
   $$('#viewBody [data-step]').forEach((i) => (i.onchange = async () => { try { await api('POST', `/cards/${c.id}/check`, { index: +i.dataset.step, checked: i.checked }); await load(); } catch (e) { toast(e.message); await load(); } }));
-  $$('#viewBody [data-lb]').forEach((img) => (img.onclick = () => { $('#lbImg').src = img.src; $('#lbDlg').showModal(); }));
+  $$('#viewBody [data-lb]').forEach((img) => (img.onclick = () => { $('#lbImg').src = `/api/files/${img.dataset.lb}`; $('#lbDlg').showModal(); }));
+  $$('#viewBody [data-gone]').forEach((el) => (el.onclick = () => toast(t('recycled_note'))));
+  $$('#viewBody [data-pin]').forEach((b) => (b.onclick = async () => { try { await api('PATCH', `/cards/${c.id}/files/${b.dataset.pin}`, { pinned: b.dataset.on !== '1' }); await load(); } catch (e) { toast(e.message); } }));
   $$('#viewBody [data-rmfile]').forEach((b) => (b.onclick = async () => { if (!confirm(t('confirm_remove_file', b.dataset.name))) return; try { await api('DELETE', `/cards/${c.id}/files/${b.dataset.rmfile}`); await load(); } catch (e) { toast(e.message); } }));
   const drop = $('#drop'), fin = $('#fileIn');
   $('#pickFile').onclick = (e) => { e.preventDefault(); fin.click(); };

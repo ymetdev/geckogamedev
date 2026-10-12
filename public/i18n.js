@@ -44,6 +44,11 @@ en: {
   a_created: 'created', a_claimed: 'claimed', a_unclaimed: 'released', a_ready_to_test: 'marked ready to test', a_complete: 'passed (complete)', a_test_failed: 'test failed',
   a_reopened: 'reopened', a_commented: 'commented', a_edited: 'edited', a_file_added: 'attached', a_file_removed: 'removed file', a_linked: 'linked', a_unlinked: 'unlinked',
   tab_filters: 'Filters',
+  recycled: 'recycled', recycled_note: 'The original was recycled to save space; only the preview is kept. Upload it again if you still need it.',
+  pin: 'Pin (never recycle)', unpin: 'Unpin', menu_storage: 'File storage', storage_title: 'File storage', storage_used: '{0} of {1} used',
+  storage_files: '{0} files · {1} originals recycled · {2} pinned',
+  storage_policy: 'Recycling is automatic. Originals of finished cards are recycled after {0} days, and when the budget fills up the oldest finished files go first (videos before images). Previews are always kept. Pin 📌 a file to keep its original. Re-uploading a recycled file brings it back.',
+  clean_now: 'Clean now', cleaned: 'Freed {0}', nothing_to_clean: 'Nothing to recycle',
   send_test: '➡ Send to Ready to Test', edit_steps: '✎ Edit test steps', ready_title: 'Send to Ready to Test', ready_sub: 'What was done (short)', ready_steps: 'How to test: one step per line (expected result at the end)', ready_hint: 'The tester will tick these steps one by one, so make each one clear.', ready_need: 'Add at least one test step', send: 'Send', move_not_yours: 'Only the owner of the card can send it to testing',
 },
 th: {
@@ -84,6 +89,11 @@ th: {
   a_created: 'สร้างการ์ด', a_claimed: 'รับงาน', a_unclaimed: 'ปล่อยการ์ด', a_ready_to_test: 'ส่งพร้อมเทส', a_complete: 'เทสผ่าน (เสร็จสิ้น)', a_test_failed: 'เทสไม่ผ่าน',
   a_reopened: 'เปิดใหม่', a_commented: 'คอมเมนต์', a_edited: 'แก้ไข', a_file_added: 'แนบไฟล์', a_file_removed: 'ลบไฟล์', a_linked: 'ลิงก์การ์ด', a_unlinked: 'เลิกลิงก์',
   tab_filters: 'ตัวกรอง',
+  recycled: 'รีไซเคิลแล้ว', recycled_note: 'ไฟล์ต้นฉบับถูกรีไซเคิลเพื่อประหยัดพื้นที่ เหลือแต่รูปตัวอย่าง ถ้ายังต้องการ ให้อัปโหลดใหม่',
+  pin: 'ปักหมุด (ไม่ให้รีไซเคิล)', unpin: 'เลิกปักหมุด', menu_storage: 'พื้นที่เก็บไฟล์', storage_title: 'พื้นที่เก็บไฟล์', storage_used: 'ใช้ไป {0} จาก {1}',
+  storage_files: '{0} ไฟล์ · รีไซเคิลต้นฉบับแล้ว {1} · ปักหมุด {2}',
+  storage_policy: 'ระบบรีไซเคิลอัตโนมัติ: ไฟล์ต้นฉบับของการ์ดที่เสร็จแล้วจะถูกรีไซเคิลหลัง {0} วัน และเมื่อพื้นที่ใกล้เต็มจะรีไซเคิลไฟล์ที่เสร็จเก่าที่สุดก่อน (วิดีโอก่อนรูป) โดยเก็บรูปตัวอย่างไว้เสมอ กด 📌 เพื่อปักหมุดไฟล์ที่ต้องเก็บต้นฉบับ และถ้าอัปโหลดไฟล์ที่ถูกรีไซเคิลซ้ำ ไฟล์จะกลับมา',
+  clean_now: 'ล้างตอนนี้', cleaned: 'คืนพื้นที่ {0}', nothing_to_clean: 'ไม่มีอะไรให้รีไซเคิล',
   send_test: '➡ ส่งไปพร้อมเทส', edit_steps: '✎ แก้วิธีเทส', ready_title: 'ส่งไปพร้อมเทส', ready_sub: 'สิ่งที่ทำ (สั้นๆ)', ready_steps: 'วิธีเทส: บรรทัดละ 1 ขั้น (ใส่ผลที่คาดหวังท้ายข้อ)', ready_hint: 'Tester จะติ๊กทีละข้อ ควรเขียนให้ชัดเจนทีละขั้น', ready_need: 'ใส่วิธีเทสอย่างน้อย 1 ข้อ', move_not_yours: 'เฉพาะเจ้าของการ์ดเท่านั้นที่ส่งไปเทสได้',
 },
 };

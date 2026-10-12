@@ -21,6 +21,9 @@ const FILE_TYPES = { // allowed attachments: mime -> max bytes
   'video/mp4': 12e6, 'video/webm': 12e6,
 };
 const MAX_FILES_PER_CARD = 8;
+// Recycling policy: originals are purged (thumbnails stay) when storage nears the budget or a finished card gets old
+const FILE_BUDGET = Math.round(Number(process.env.FILE_BUDGET_MB || 300) * 1e6);
+const FILE_KEEP_DAYS = Number(process.env.FILE_KEEP_DAYS || 14);
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase(); // bootstrap admin
 
 export const STATUSES = ['open', 'in_progress', 'ready_to_test', 'complete'];
@@ -46,13 +49,25 @@ const pool = DATABASE_URL
   : null;
 if (pool) {
   await pool.query('CREATE TABLE IF NOT EXISTS devboard_state (id int PRIMARY KEY, data jsonb NOT NULL)');
-  await pool.query('CREATE TABLE IF NOT EXISTS devboard_files (id text PRIMARY KEY, card_id int, mime text NOT NULL, data bytea NOT NULL)');
+  await pool.query('CREATE TABLE IF NOT EXISTS devboard_blobs (hash text PRIMARY KEY, mime text NOT NULL, data bytea, thumb bytea)');
   const r = await pool.query('SELECT data FROM devboard_state WHERE id = 1');
   if (r.rows[0]) db = r.rows[0].data;
 } else {
   try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
 }
 db.users ||= []; db.sessions ||= {};
+// one-time migration: files from the first version (id-addressed table / raw files) -> content-addressed blobs
+for (const c of db.cards) for (const f of c.files || []) {
+  if (f.blob) continue;
+  let buf = null;
+  if (pool) { const ex = await pool.query("SELECT to_regclass('devboard_files') AS t"); if (ex.rows[0].t) buf = (await pool.query('SELECT data FROM devboard_files WHERE id = $1', [f.id])).rows[0]?.data || null; }
+  else { try { buf = fs.readFileSync(path.join(UPLOAD_DIR, f.id)); } catch { /* missing */ } }
+  if (buf) { f.blob = crypto.createHash('sha256').update(buf).digest('hex'); await putBlobEarly(f.blob, f.mime, buf); } else { f.blob = f.id; f.purged = true; }
+}
+async function putBlobEarly(hash, mime, buf) {
+  if (pool) return pool.query('INSERT INTO devboard_blobs (hash, mime, data) VALUES ($1,$2,$3) ON CONFLICT (hash) DO NOTHING', [hash, mime, buf]);
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true }); fs.writeFileSync(path.join(UPLOAD_DIR, hash), buf);
+}
 for (const c of db.cards) { // upgrade older cards with the newer fields
   c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; c.test_checks ??= (c.test_steps || []).map(() => false);
 }
@@ -176,19 +191,71 @@ function descendants(id) { // all sub-card ids under a card
   while (stack.length) { const cur = stack.pop(); for (const c of db.cards) if (c.parent === cur && !out.has(c.id)) { out.add(c.id); stack.push(c.id); } }
   return out;
 }
-// binary storage for attachments (Postgres bytea, or ./data/uploads in file mode)
-async function putFile(id, cardId, mime, buf) {
-  if (pool) return pool.query('INSERT INTO devboard_files (id, card_id, mime, data) VALUES ($1,$2,$3,$4)', [id, cardId, mime, buf]);
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true }); fs.writeFileSync(path.join(UPLOAD_DIR, id), buf);
+// Attachment storage, content-addressed (sha256): identical files are stored once and shared between cards.
+// data = NULL means the original was recycled (the small thumbnail is kept). Postgres bytea, or ./data/uploads in file mode.
+const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+const fp = (hash, thumb) => path.join(UPLOAD_DIR, hash + (thumb ? '.thumb' : ''));
+async function putBlob(hash, mime, buf) {
+  if (pool) return pool.query('INSERT INTO devboard_blobs (hash, mime, data) VALUES ($1,$2,$3) ON CONFLICT (hash) DO UPDATE SET data = EXCLUDED.data', [hash, mime, buf]);
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true }); fs.writeFileSync(fp(hash), buf);
 }
-async function getFile(id) {
-  if (pool) { const r = await pool.query('SELECT data FROM devboard_files WHERE id = $1', [id]); return r.rows[0]?.data || null; }
-  try { return fs.readFileSync(path.join(UPLOAD_DIR, id)); } catch { return null; }
+async function putThumb(hash, buf) {
+  if (pool) return pool.query('UPDATE devboard_blobs SET thumb = $2 WHERE hash = $1', [hash, buf]);
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true }); fs.writeFileSync(fp(hash, true), buf);
 }
-async function delFile(id) {
-  if (pool) return pool.query('DELETE FROM devboard_files WHERE id = $1', [id]);
-  try { fs.unlinkSync(path.join(UPLOAD_DIR, id)); } catch { /* already gone */ }
+async function getBlob(hash, thumb = false) {
+  if (pool) { const r = await pool.query(`SELECT ${thumb ? 'thumb' : 'data'} AS d FROM devboard_blobs WHERE hash = $1`, [hash]); return r.rows[0]?.d || null; }
+  try { return fs.readFileSync(fp(hash, thumb)); } catch { return null; }
 }
+async function purgeBlob(hash) { // drop the original, keep the thumbnail
+  if (pool) return pool.query('UPDATE devboard_blobs SET data = NULL WHERE hash = $1', [hash]);
+  try { fs.unlinkSync(fp(hash)); } catch { /* already gone */ }
+}
+async function delBlob(hash) { // remove everything for a blob nobody references any more
+  if (pool) return pool.query('DELETE FROM devboard_blobs WHERE hash = $1', [hash]);
+  for (const t of [false, true]) { try { fs.unlinkSync(fp(hash, t)); } catch { /* already gone */ } }
+}
+const allFiles = () => db.cards.flatMap((c) => c.files.map((f) => ({ f, c })));
+async function releaseBlob(hash) { if (!allFiles().some(({ f }) => f.blob === hash)) await delBlob(hash); }
+
+// Recycler: frees space by purging original files (never the thumbnails), oldest/biggest-value-last first
+let recycling = false;
+function storageStats() {
+  const blobs = new Map();
+  for (const { f, c } of allFiles()) {
+    const b = blobs.get(f.blob) || { hash: f.blob, size: f.size, video: f.mime.startsWith('video/'), purged: !!f.purged, pinned: false, allDone: true, newest: '', oldest: f.at, latestCard: '' };
+    b.pinned ||= !!f.pinned; b.allDone &&= c.status === 'complete';
+    if (f.at > b.newest) b.newest = f.at; if (f.at < b.oldest) b.oldest = f.at;
+    if (c.updated_at > b.latestCard) b.latestCard = c.updated_at;
+    blobs.set(f.blob, b);
+  }
+  const list = [...blobs.values()], live = list.filter((b) => !b.purged);
+  return { list, live, used: live.reduce((n, b) => n + b.size, 0), budget: FILE_BUDGET, files: allFiles().length, blobs: list.length,
+    purged: list.filter((b) => b.purged).length, pinned: list.filter((b) => b.pinned).length, keepDays: FILE_KEEP_DAYS };
+}
+async function recycle({ protect = '' } = {}) {
+  if (recycling) return { freed: 0, purged: 0 };
+  recycling = true;
+  try {
+    const st = storageStats(); let used = st.used, freed = 0, purged = 0;
+    const kill = async (b) => {
+      await purgeBlob(b.hash); used -= b.size; freed += b.size; purged++;
+      for (const { f } of allFiles()) if (f.blob === b.hash) { f.purged = true; }
+    };
+    const cutoff = Date.now() - FILE_KEEP_DAYS * 864e5;
+    const live = st.live.filter((b) => !b.pinned && b.hash !== protect);
+    for (const b of live) if (b.allDone && Date.parse(b.latestCard) < cutoff) await kill(b); // 1) finished work gets old
+    if (used > st.budget) { // 2) over budget: shed in this order until under 90%
+      const rank = (b) => (b.allDone ? 0 : 2) + (b.video ? 0 : 1); // done videos, done images, active videos, active images
+      const order = live.filter((b) => !b.purged && !(b.allDone && Date.parse(b.latestCard) < cutoff)).sort((x, y) => rank(x) - rank(y) || x.oldest.localeCompare(y.oldest));
+      for (const b of order) { if (used <= st.budget * 0.9) break; await kill(b); }
+    }
+    if (purged) { await save(); console.log(`Recycled ${purged} file(s), freed ${(freed / 1e6).toFixed(1)} MB`); }
+    return { freed, purged };
+  } finally { recycling = false; }
+}
+setInterval(() => recycle().catch((e) => console.error('recycle failed:', e.message)), 6 * 36e5);
+
 function readRaw(req, max) {
   return new Promise((resolve, reject) => {
     const chunks = []; let n = 0;
@@ -316,13 +383,23 @@ async function api(req, res, url) {
     throw new HttpError(405, 'Method not allowed');
   }
 
+  // ---- storage ----
+  if (parts[0] === 'storage' && method === 'GET') { const { list, live, ...st } = storageStats(); return sendJson(res, 200, st); }
+  if (parts[0] === 'storage' && parts[1] === 'recycle' && method === 'POST') {
+    forbid(me, 'admin');
+    const r = await recycle(); const { list, live, ...st } = storageStats();
+    return sendJson(res, 200, { ...st, ...r });
+  }
+
   // ---- attachments: download ----
   if (parts[0] === 'files' && parts.length === 2 && method === 'GET') {
     const f = db.cards.flatMap((c) => c.files).find((x) => x.id === parts[1]);
     need(f, 404, 'File not found');
-    const buf = await getFile(f.id);
-    need(buf, 404, 'File not found');
-    const headers = { 'Content-Type': f.mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+    const wantThumb = url.searchParams.get('thumb') === '1';
+    const buf = await getBlob(f.blob, wantThumb);
+    need(buf || wantThumb, 410, 'This file was recycled to save space', { recycled: true });
+    need(buf, 404, 'No thumbnail');
+    const headers = { 'Content-Type': wantThumb ? 'image/jpeg' : f.mime, 'Accept-Ranges': 'bytes', 'Cache-Control': wantThumb ? 'private, max-age=604800' : 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
     const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
     if (m && (m[1] || m[2])) { // Range support so videos can seek
       const start = m[1] ? Number(m[1]) : Math.max(0, buf.length - Number(m[2]));
@@ -375,9 +452,10 @@ async function api(req, res, url) {
   if (!action && method === 'DELETE') {
     forbid(me, 'admin', 'dev');
     notify('deleted', card, user); // the team sees who deleted what
-    for (const f of card.files) await delFile(f.id);
+    const hashes = card.files.map((f) => f.blob);
     for (const c of db.cards) { c.related = c.related.filter((r) => r !== card.id); if (c.parent === card.id) c.parent = card.parent; }
     db.cards = db.cards.filter((c) => c.id !== card.id);
+    for (const h of new Set(hashes)) await releaseBlob(h);
     await save();
     return sendJson(res, 200, { ok: true });
   }
@@ -402,12 +480,21 @@ async function api(req, res, url) {
     await save();
     return sendJson(res, 200, card);
   }
+  if (action === 'files' && parts[3] && method === 'PATCH') { // pin / unpin: pinned originals are never recycled
+    const f = card.files.find((x) => x.id === parts[3]);
+    need(f, 404, 'File not found');
+    need(can(me, 'admin') || f.by === user, 403, 'Only the uploader or an admin can pin a file');
+    need(!f.purged || body.pinned === false, 409, 'The original was already recycled');
+    for (const x of allFiles().map(({ f: g }) => g)) if (x.blob === f.blob) x.pinned = !!body.pinned;
+    await save();
+    return sendJson(res, 200, card);
+  }
   if (action === 'files' && parts[3] && method === 'DELETE') {
     const f = card.files.find((x) => x.id === parts[3]);
     need(f, 404, 'File not found');
     need(can(me, 'admin') || f.by === user, 403, 'Only the uploader or an admin can remove a file');
     card.files = card.files.filter((x) => x !== f);
-    await delFile(f.id);
+    await releaseBlob(f.blob);
     log(card, user, 'file_removed', f.name);
     await save();
     return sendJson(res, 200, card);
@@ -433,18 +520,32 @@ async function api(req, res, url) {
       log(card, user, 'unclaimed');
       break;
     }
-    case 'files': { // upload one attachment: raw body, Content-Type = mime, X-Filename = url-encoded name
+    case 'files': {
+      if (parts[3] && parts[4] === 'thumb') { // client-made JPEG thumbnail for an uploaded file
+        const f = card.files.find((x) => x.id === parts[3]);
+        need(f, 404, 'File not found');
+        const buf = await readRaw(req, 150e3);
+        need(buf.length > 0 && buf[0] === 0xff && buf[1] === 0xd8, 400, 'Thumbnail must be a JPEG');
+        await putThumb(f.blob, buf);
+        for (const { f: g } of allFiles()) if (g.blob === f.blob) g.thumb = true;
+        break;
+      }
+      // upload one attachment: raw body, Content-Type = mime, X-Filename = url-encoded name
       const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       need(FILE_TYPES[mime], 415, 'Only PNG/JPEG/GIF/WebP images and MP4/WebM videos are allowed');
       need(card.files.length < MAX_FILES_PER_CARD, 409, `Max ${MAX_FILES_PER_CARD} files per card`);
       const buf = await readRaw(req, FILE_TYPES[mime]);
       need(buf.length > 0, 400, 'Empty file');
+      const hash = sha(buf);
+      const twin = allFiles().find(({ f }) => f.blob === hash)?.f; // same bytes already stored -> share (and revive if recycled)
+      if (!twin || twin.purged) { await putBlob(hash, mime, buf); for (const { f } of allFiles()) if (f.blob === hash) f.purged = false; }
       const id = crypto.randomBytes(12).toString('hex');
       let name = 'file'; try { name = decodeURIComponent(String(req.headers['x-filename'] || 'file')); } catch { /* keep default */ }
-      await putFile(id, card.id, mime, buf);
-      card.files.push({ id, name: clean(name.replace(/[\\/]/g, '_'), 80), mime, size: buf.length, by: user, at: now() });
+      card.files.push({ id, name: clean(name.replace(/[\\/]/g, '_'), 80), mime, size: buf.length, by: user, at: now(), blob: hash, purged: false, pinned: !!twin?.pinned, thumb: !!twin?.thumb });
       log(card, user, 'file_added', card.files.at(-1).name);
-      break;
+      await save();
+      await recycle({ protect: hash }); // make room if we just went over budget
+      return sendJson(res, 200, card);
     }
     case 'link': case 'unlink': { // "related" links are two-way
       const other = db.cards.find((c) => c.id === Number(body.id));
@@ -559,4 +660,7 @@ http.createServer(async (req, res) => {
   } catch (e) {
     sendJson(res, e.code || 400, { error: e.message, ...e.extra });
   }
-}).listen(PORT, () => console.log(`GeckoBoard running at http://localhost:${PORT}`));
+}).listen(PORT, () => {
+  console.log(`GeckoBoard running at http://localhost:${PORT}`);
+  recycle().catch((e) => console.error('recycle failed:', e.message));
+});

@@ -153,6 +153,13 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
   dialog{width:100vw;max-width:100vw;max-height:100vh;height:100vh;border-radius:0}
   .actions .btn{flex:1}
 }
+.thumb img.gone{filter:grayscale(.9) brightness(.55);cursor:help}
+.thumb .ph{display:grid;place-content:center;height:100%;font-size:28px;color:var(--mute);cursor:help}
+.thumb .rec{position:absolute;left:4px;bottom:4px;background:#000b;color:#cbd5e1;font-size:10px;padding:1px 6px;border-radius:8px}
+.thumb .pin{position:absolute;top:4px;left:4px;background:#000a;border:0;color:#9aa3b5;border-radius:6px;width:22px;height:22px;cursor:pointer;font-size:12px;opacity:.75}
+.thumb .pin.on{color:#facc15;opacity:1}
+.bar{height:10px;border-radius:6px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#4ade80,#f5c451 70%,#f87171)}
 </style>
 </head>
 <body>
@@ -278,7 +285,7 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
     <details><summary>ฟีเจอร์อื่นๆ</summary><ul>
       <li><b>ลากการ์ด</b>ข้ามคอลัมน์ได้: เปิด→กำลังทำ (รับงาน), กำลังทำ→เปิด (ปล่อย), พร้อมเทส→เสร็จสิ้น หรือกลับไปกำลังทำ (Tester)</li>
       <li><b>ค้นหา/กรอง</b> ที่แถบใต้หัวเว็บ: ค้นหา ความสำคัญ tag คนรับ milestone</li>
-      <li><b>ไฟล์แนบ</b>: เปิดการ์ด แล้วลากไฟล์มาวาง หรือกด Ctrl+V วางรูปจากคลิปบอร์ด รูปจะถูกย่อให้อัตโนมัติ และ Claude ดูรูปได้ผ่าน MCP</li>
+      <li><b>ไฟล์แนบ</b>: เปิดการ์ด แล้วลากไฟล์มาวาง หรือกด Ctrl+V วางรูปจากคลิปบอร์ด รูปจะถูกย่อให้อัตโนมัติ และ Claude ดูรูปได้ผ่าน MCP · ไฟล์ต้นฉบับของงานที่เสร็จนานแล้วจะถูก<b>รีไซเคิลอัตโนมัติ</b>เมื่อพื้นที่ใกล้เต็ม (เหลือรูปตัวอย่างไว้) กด 📌 เพื่อปักหมุดไฟล์สำคัญ</li>
       <li><b>วันกำหนดส่ง / Milestone</b> ตั้งตอนสร้างหรือแก้ไขการ์ด ใบที่เลยกำหนดจะขึ้นสีแดง</li>
       <li><b>ลิงก์การ์ด</b>: ตั้งการ์ดแม่/การ์ดย่อย หรือเชื่อมการ์ดที่เกี่ยวข้องกัน</li>
       <li><b>แท็กคน</b>ในคอมเมนต์ด้วย <code>@ชื่อ</code> และกระดิ่ง 🔔 สรุปสิ่งที่เกี่ยวกับคุณ</li>
@@ -327,7 +334,7 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
     <details><summary>More features</summary><ul>
       <li><b>Drag cards</b> between columns: Open→In Progress (claim), In Progress→Open (release), Ready to Test→Complete or back to In Progress (testers)</li>
       <li><b>Search / filter</b> in the bar under the header: search, priority, tag, owner, milestone</li>
-      <li><b>Attachments</b>: open a card, then drop files or press Ctrl+V to paste an image. Images are shrunk automatically and Claude can look at them through MCP</li>
+      <li><b>Attachments</b>: open a card, then drop files or press Ctrl+V to paste an image. Images are shrunk automatically and Claude can look at them through MCP · Originals of long-finished cards are <b>recycled automatically</b> when space runs low (a preview is kept). Pin 📌 important files</li>
       <li><b>Due date / Milestone</b> when creating or editing a card. Overdue cards turn red</li>
       <li><b>Links</b>: set a parent / sub-cards, or link related cards</li>
       <li><b>Mention people</b> in comments with <code>@name</code>; the 🔔 bell summarises what concerns you</li>
@@ -354,6 +361,8 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
 <dialog id="sumDlg"><div class="dlg"><h3 data-i18n="summary"></h3><div id="sumBody" class="help" style="max-height:72vh"></div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#sumDlg').close()" data-i18n="close"></button></div></div></dialog>
+<dialog id="storDlg"><div class="dlg"><h3 data-i18n="storage_title"></h3><div id="storBody" style="display:flex;flex-direction:column;gap:10px"></div>
+  <div class="actions"><button class="btn" id="storClean" data-i18n="clean_now"></button><span class="sp"></span><button class="btn" onclick="$('#storDlg').close()" data-i18n="close"></button></div></div></dialog>
 <dialog id="lbDlg"><img id="lbImg" alt=""></dialog>
 
 <script src="/i18n.js"></script>

@@ -92,10 +92,12 @@ export function createServer({ base, token }) {
       const f = (card.files || []).find((x) => x.id === file_id);
       if (!f) throw new Error('File not found on this card');
       if (!f.mime.startsWith('image/')) return text(`"${f.name}" is a ${f.mime} file and cannot be viewed here.`);
-      const res = await fetch(base.replace(/\/$/, '') + `/api/files/${file_id}`, { headers: { 'x-devboard-token': token } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const get = (q) => fetch(base.replace(/\/$/, '') + `/api/files/${file_id}${q}`, { headers: { 'x-devboard-token': token } });
+      let res = await get(''), note = '', mime = f.mime;
+      if (res.status === 410) { res = await get('?thumb=1'); note = ' - ORIGINAL WAS RECYCLED, this is only the small preview'; mime = 'image/jpeg'; }
+      if (!res.ok) throw new Error(res.status === 410 || res.status === 404 ? 'File was recycled and has no preview' : `HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
-      return { content: [{ type: 'text', text: `${f.name} (${f.mime}, ${f.size} bytes)` }, { type: 'image', data: buf.toString('base64'), mimeType: f.mime }] };
+      return { content: [{ type: 'text', text: `${f.name} (${f.mime}, ${f.size} bytes)${note}` }, { type: 'image', data: buf.toString('base64'), mimeType: mime }] };
     } catch (e) { return fail(e); }
   });
 
