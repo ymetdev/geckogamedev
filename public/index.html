@@ -160,36 +160,91 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
 .thumb .pin.on{color:#facc15;opacity:1}
 .bar{height:10px;border-radius:6px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,#4ade80,#f5c451 70%,#f87171)}
+.hx{display:contents}.hamb,.ftog{display:none}.fsel{display:contents}
+.need{border-color:#3b4270;color:var(--accent)}.need.on{background:var(--accent);color:#0b0d14;border-color:var(--accent);font-weight:600}
+.need b{background:var(--line);color:var(--text);border-radius:10px;padding:0 7px;margin-left:6px;font-size:11px}.need.on b{background:#0b0d1433;color:#0b0d14}
+#toast{display:none;align-items:center;gap:12px}
+#toast button{background:none;border:1px solid #c26b72;color:#ffd7da;border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:600}
+#toast.ok{background:#16231c;border-color:#2c5a3f;color:#d6f5e0}#toast.ok button{border-color:#4a9a6a;color:#d6f5e0}
+.cnt{margin-left:auto;display:flex;gap:6px;align-items:center}.cnt .count{margin-left:0}
+.count.hot{background:var(--test);color:#150d2b;font-weight:700}.count.me{background:#232748;color:#aab4ff}
+.card.flash{animation:flash 2.4s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 2px var(--accent),0 0 18px #7c8cff88;background:#262b4a}100%{box-shadow:0 0 0 0 transparent}}
+.card.drop-before{box-shadow:0 -3px 0 var(--accent)}.card.drop-after{box-shadow:0 3px 0 var(--accent)}
+.onb{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--mute)}
+.onb .big{font-size:56px}.onb h2{color:var(--text);margin:8px 0}.onb p{max-width:420px;margin:0 auto 16px}
+.draftbar{display:flex;gap:10px;align-items:center;justify-content:space-between;background:#1d2133;border:1px solid #3b4270;border-radius:8px;padding:6px 10px;font-size:12px;color:#aab4ff}
+#lbDlg{width:100vw;height:100vh;max-width:none;max-height:none;border:0;border-radius:0;background:#000e;padding:0;overflow:hidden}
+#lbDlg .lbwrap{position:absolute;inset:0 0 52px 0;overflow:auto;display:grid;place-content:center}
+#lbDlg img{max-width:96vw;max-height:calc(100vh - 70px);border-radius:8px;cursor:zoom-in;display:block}
+#lbDlg.zoom img{max-width:none;max-height:none;cursor:zoom-out}
+.lbn{position:absolute;top:50%;transform:translateY(-50%);background:#000a;border:1px solid #fff3;color:#fff;border-radius:50%;width:48px;height:48px;font-size:28px;cursor:pointer;z-index:2}
+.lbn.prev{left:12px}.lbn.next{right:12px}
+.lbbar{position:absolute;left:0;right:0;bottom:0;height:52px;display:flex;gap:8px;align-items:center;padding:0 14px;background:#000a;color:#ddd;font-size:13px}
+@media(max-width:760px){
+  .hamb{display:inline-block}
+  .hx{display:none;width:100%;order:5;flex-wrap:wrap;gap:8px;padding-top:6px}.hx.open{display:flex}
+  .mobsp{display:block}
+  .ftog{display:inline-block}
+  .fsel{display:none;width:100%;flex-wrap:wrap;gap:8px}.fsel.open{display:flex}
+  .filters .q{min-width:0}
+  #userBox .chip>span:first-child{max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+.spin{width:22px;height:22px;border:3px solid #ffffff22;border-top-color:var(--accent);border-radius:50%;animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.btn.loading{position:relative;color:transparent!important;pointer-events:none}
+.btn.loading::after{content:"";position:absolute;inset:0;margin:auto;width:16px;height:16px;border:2.5px solid #ffffff44;border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite}
+.btn.primary.loading::after,.btn.ok.loading::after{border-color:#0b0d1444;border-top-color:#0b0d14}
+.card.busy{opacity:.55;pointer-events:none;position:relative}
+.card.busy::after{content:"";position:absolute;top:10px;right:10px;width:16px;height:16px;border:2.5px solid #ffffff33;border-top-color:var(--accent);border-radius:50%;animation:rot .7s linear infinite}
+#topbar{position:fixed;left:0;top:0;height:3px;width:0;background:linear-gradient(90deg,var(--accent),#b48cff);z-index:300;opacity:0;transition:opacity .2s}
+#topbar.on{opacity:1;animation:topbar 1.6s ease-in-out infinite}
+@keyframes topbar{0%{width:0;margin-left:0}50%{width:70%;margin-left:10%}100%{width:0;margin-left:100%}}
+#boot{position:fixed;inset:0;background:var(--bg);z-index:250;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;color:var(--mute)}
+#boot .spin{width:34px;height:34px;border-width:4px}
+#boot small{max-width:320px;text-align:center}
 </style>
 </head>
 <body>
 <header>
   <h1>◆ GeckoBoard</h1>
-  <div class="seg" id="typeSeg">
-    <button data-v="" class="on" data-i18n="all"></button><button data-v="ticket" data-i18n="tickets"></button><button data-v="task" data-i18n="tasks"></button>
+  <button class="btn hamb" id="hamb" aria-label="Menu" aria-expanded="false">☰</button>
+  <div class="hx" id="hx">
+    <div class="seg" id="typeSeg">
+      <button data-v="" class="on" data-i18n="all"></button><button data-v="ticket" data-i18n="tickets"></button><button data-v="task" data-i18n="tasks"></button>
+    </div>
+    <div class="seg" id="whoSeg">
+      <button data-v="" class="on" data-i18n="everyone"></button><button data-v="mine" data-i18n="mine"></button><button data-v="unassigned" data-i18n="unassigned"></button>
+    </div>
+    <button class="btn need" id="needBtn" aria-pressed="false"></button>
+    <span class="sp"></span>
+    <button class="btn" id="sumBtn" data-i18n="summary"></button>
+    <div class="seg" id="langSeg" title="Language / ภาษา"><button data-v="th">TH</button><button data-v="en">EN</button></div>
+    <button class="btn" id="helpBtn" data-i18n="help"></button>
   </div>
-  <div class="seg" id="whoSeg">
-    <button data-v="" class="on" data-i18n="everyone"></button><button data-v="mine" data-i18n="mine"></button><button data-v="unassigned" data-i18n="unassigned"></button>
-  </div>
-  <span class="sp"></span>
+  <span class="sp mobsp"></span>
   <div class="bellbox"><button class="btn bell" id="bellBtn" title="Notifications">🔔<span class="badge" id="bellBadge" hidden></span></button><div class="nmenu" id="bellMenu"></div></div>
-  <button class="btn" id="sumBtn" data-i18n="summary"></button>
-  <div class="seg" id="langSeg" title="Language / ภาษา"><button data-v="th">TH</button><button data-v="en">EN</button></div>
-  <button class="btn" id="helpBtn" data-i18n="help"></button>
-  <button class="btn primary" id="newBtn" data-i18n="new"></button>
+  <button class="btn primary" id="newBtn" data-i18n="new" title="N"></button>
   <div id="userBox" class="userbox"></div>
 </header>
 <div class="filters" id="filters">
-  <input class="q" id="fq" type="search" data-i18n-ph="search_ph">
-  <select id="fpri"></select><select id="ftag"></select><select id="fown"></select><select id="fms"></select>
-  <button class="btn" id="fclear" data-i18n="clear" hidden></button>
+  <input class="q" id="fq" type="search" data-i18n-ph="search_ph" title="/">
+  <button class="btn ftog" id="fToggle" aria-expanded="false">⚙</button>
+  <div class="fsel" id="fsel">
+    <select id="fpri"></select><select id="ftag"></select><select id="fown"></select><select id="fms"></select>
+    <button class="btn" id="sortBtn"></button>
+    <button class="btn" id="fclear" data-i18n="clear" hidden></button>
+  </div>
 </div>
 <div class="tabs" id="tabs"></div>
 <main id="board"></main>
-<div id="toast"></div>
+<div id="topbar"></div>
+<div id="boot"><div class="spin"></div><div id="bootMsg"></div><small id="bootSlow" hidden></small></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <dialog id="cardDlg"><form class="dlg" method="dialog" id="cardForm">
   <h3 id="cardDlgTitle"></h3>
+  <div class="draftbar" id="draftBar" hidden><span data-i18n="draft_restored"></span><button type="button" class="btn" id="draftFresh" data-i18n="draft_fresh"></button></div>
   <div class="row">
     <label style="flex:1"><span data-i18n="type"></span><select name="type"><option value="ticket" data-i18n="ticket_opt"></option><option value="task" data-i18n="task_opt"></option></select></label>
     <label style="flex:1"><span data-i18n="priority"></span><select name="priority"><option value="low" data-i18n="pri_low"></option><option value="medium" selected data-i18n="pri_medium"></option><option value="high" data-i18n="pri_high"></option><option value="critical" data-i18n="pri_critical"></option></select></label>
@@ -295,6 +350,12 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li><b>แท็กคน</b>ในคอมเมนต์ด้วย <code>@ชื่อ</code> และกระดิ่ง 🔔 สรุปสิ่งที่เกี่ยวกับคุณ</li>
       <li><b>แจ้งเตือน Discord</b> เมื่อพร้อมเทส / เทสไม่ผ่าน / เสร็จสิ้น / ถูกแท็ก (เมื่อ admin ตั้งค่าไว้)</li>
       <li><b>คัดลอกเป็นข้อความ</b> ในหน้าการ์ด เพื่อส่งต่อให้คนนอกระบบ · <b>📊 สรุป</b> ดูภาพรวมของทีม</li></ul></details>
+    <details><summary>คีย์ลัดและเคล็ดลับ</summary><ul>
+      <li><code>N</code> สร้างการ์ด · <code>/</code> ค้นหา · <code>M</code> งานที่รอฉัน · <code>?</code> เปิดวิธีใช้ · <code>Esc</code> ปิดหน้าต่าง · <code>Ctrl+Enter</code> ส่งฟอร์ม</li>
+      <li><b>เลิกทำ</b>: หลังรับงาน/ปล่อย/ส่งเทส/ผ่าน/ไม่ผ่าน/ลบ จะมีปุ่ม "เลิกทำ" ที่มุมล่างนาน 8 วินาที (ลบการ์ดกู้คืนได้ 7 วัน)</li>
+      <li>ฟอร์มสร้างการ์ดที่ยังไม่เสร็จ <b>ถูกบันทึกร่างให้อัตโนมัติ</b> ปิดแล้วเปิดใหม่ข้อความยังอยู่</li>
+      <li>กดปุ่ม <b>↕</b> เพื่อสลับระหว่างเรียงอัตโนมัติ (ความสำคัญ → วันกำหนด) กับ <b>เรียงเอง</b> ลากการ์ดสลับลำดับในคอลัมน์ได้ ทุกคนเห็นลำดับเดียวกัน</li>
+      <li>บอร์ดอัปเดตสดเมื่อมีคนเปลี่ยน การ์ดที่เปลี่ยนจะเรืองแสงสั้นๆ</li></ul></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
       <li><b>dev</b>: สร้าง/ลบการ์ด รับ/ปล่อยการ์ด ส่งพร้อมเทส (เอง หรือผ่าน Claude)</li>
       <li><b>tester</b>: ผ่าน / ไม่ผ่าน / เปิดใหม่</li>
@@ -345,6 +406,12 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
       <li><b>Mention people</b> in comments with <code>@name</code>; the 🔔 bell summarises what concerns you</li>
       <li><b>Discord alerts</b> on ready to test / test failed / complete / mentions (when an admin has set it up)</li>
       <li><b>Copy as text</b> in the card to share outside the tool · <b>📊 Summary</b> for the team overview</li></ul></details>
+    <details><summary>Shortcuts &amp; tips</summary><ul>
+      <li><code>N</code> new card · <code>/</code> search · <code>M</code> what's waiting on me · <code>?</code> open this guide · <code>Esc</code> close a window · <code>Ctrl+Enter</code> submit a form</li>
+      <li><b>Undo</b>: after claiming / releasing / sending to test / pass / fail / delete, an "Undo" button appears at the bottom for 8 seconds (deleted cards can be restored for 7 days)</li>
+      <li>An unfinished new-card form is <b>saved as a draft</b>; close it and reopen and your text is still there</li>
+      <li>Use the <b>↕</b> button to switch between automatic order (priority → due date) and <b>manual order</b>: drag cards up and down in a column; everyone sees the same order</li>
+      <li>The board updates live when someone changes something; changed cards glow briefly</li></ul></details>
     <details><summary>What can each role do?</summary><ul>
       <li><b>dev</b>: create/delete cards, claim/release, send to Ready to Test (by hand or via Claude)</li>
       <li><b>tester</b>: Pass / Fail / Reopen</li>
@@ -376,7 +443,9 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#sumDlg').close()" data-i18n="close"></button></div></div></dialog>
 <dialog id="storDlg"><div class="dlg"><h3 data-i18n="storage_title"></h3><div id="storBody" style="display:flex;flex-direction:column;gap:10px"></div>
   <div class="actions"><button class="btn" id="storClean" data-i18n="clean_now"></button><span class="sp"></span><button class="btn" onclick="$('#storDlg').close()" data-i18n="close"></button></div></div></dialog>
-<dialog id="lbDlg"><img id="lbImg" alt=""></dialog>
+<dialog id="lbDlg"><div class="lbwrap" id="lbWrap"><img id="lbImg" alt=""></div>
+  <button class="lbn prev" id="lbPrev" aria-label="Previous">‹</button><button class="lbn next" id="lbNext" aria-label="Next">›</button>
+  <div class="lbbar"><span id="lbCap"></span><span class="sp"></span><a id="lbDl" class="btn" download>⬇</a><button class="btn" id="lbClose">✕</button></div></dialog>
 
 <script src="/i18n.js"></script>
 <script src="/app.js"></script>

@@ -5,8 +5,11 @@ const PRI_W = { critical: 0, high: 1, medium: 2, low: 3 };
 const OLD_DONE_MS = 7 * 864e5, STALE_MS = 3 * 864e5;
 
 let cards = [], users = [], user = null, openId = null, lang = 'en';
-const F = { type: '', who: '', q: '', pri: '', tag: '', own: '', ms: '' };
-let showOld = false, mcol = 'open', dragId = null;
+const F = { type: '', who: '', q: '', pri: '', tag: '', own: '', ms: '', need: false };
+const F0 = { ...F };
+let showOld = false, mcol = 'open', dragId = null, sortMode = 'auto', loadedOnce = false;
+try { Object.assign(F, JSON.parse(localStorage.getItem('geckoboard.filters') || '{}')); sortMode = localStorage.getItem('geckoboard.sort') === 'manual' ? 'manual' : 'auto'; } catch { /* storage blocked */ }
+const saveF = () => { try { localStorage.setItem('geckoboard.filters', JSON.stringify(F)); } catch { /* ignore */ } };
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -19,17 +22,52 @@ const role = (...r) => !!user && r.includes(user.role);
 const hue = (e) => { let h = 0; for (const ch of String(e)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
 const avatar = (e, cls = '') => `<span class="av ${cls}" style="background:hsl(${hue(e)} 45% 40%)">${esc([...nameOf(e)][0]?.toUpperCase() || '?')}</span>`;
 const LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-let toastT; const toast = (m) => { const el = $('#toast'); el.textContent = m; el.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => (el.style.display = 'none'), 3800); };
+let toastT;
+function toast(m, action, ms) { // optional action = { label, fn }: shows a button (used for Undo)
+  const el = $('#toast');
+  el.innerHTML = `<span>${esc(m)}</span>${action ? `<button id="toastAct">${esc(action.label)}</button>` : ''}`;
+  el.className = action ? 'ok' : ''; el.style.display = 'flex';
+  if (action) $('#toastAct').onclick = async () => { el.style.display = 'none'; try { await action.fn(); } catch (e) { toast(e.message); } };
+  clearTimeout(toastT); toastT = setTimeout(() => (el.style.display = 'none'), ms || (action ? 8000 : 3800));
+}
+const ERRS = [[/^Not logged in/, 'e_login'], [/^Role "(.+)" is not allowed/, 'e_role'], [/^Card #(\d+) not found/, 'e_nocard'], [/^Already claimed by (.+?)\.?$/, 'e_claimed'], [/^Card already complete/, 'e_complete'],
+  [/^Not your card/, 'e_notyours'], [/^Only an assignee/, 'e_assignee'], [/^Card must be in progress/, 'e_inprog'], [/^test_steps required/, 'e_steps'], [/^Card is not ready to test/, 'e_notready'], [/^reason required/, 'e_reason'],
+  [/^text required/, 'e_text'], [/^title required/, 'e_title'], [/^Only the reporter, the owner/, 'e_edit'], [/^File too large \(max (\d+) MB\)/, 'e_toolarge'], [/^Only PNG\/JPEG/, 'e_filetype'], [/^Max (\d+) files per card/, 'e_maxfiles'],
+  [/^Empty file/, 'e_empty'], [/^File not found/, 'e_nofile'], [/recycled/i, 'e_recycled'], [/^A card cannot be its own parent/, 'e_selfparent'], [/^Invalid date/, 'e_date'], [/^Parent card #(\d+) not found/, 'e_noparent'],
+  [/^Cannot remove the last admin/, 'e_lastadmin'], [/^Email already registered/, 'e_dupemail'], [/^(Invalid email|Enter a valid email)/, 'e_email'], [/^Invalid role/, 'e_badrole'], [/^(.+) is not registered\./, 'e_unreg'],
+  [/^(Invalid Google token|Invalid token issuer|Google email not verified)/, 'e_google'], [/^Email-only login is disabled/, 'e_emaillogin'], [/^Nothing to undo/, 'e_noundo'], [/^Someone else already took/, 'e_taken'],
+  [/^This cannot be undone/, 'e_cantundo'], [/^Nothing to restore/, 'e_norestore'], [/^Only the uploader or an admin/, 'e_uploader'], [/^The original was already recycled/, 'e_origrecycled']];
+// loading feedback: a thin top bar for slow requests, and buttons that spin + ignore repeat clicks while their request runs
+let inflight = 0, topT;
+function netStart() { inflight++; clearTimeout(topT); topT = setTimeout(() => { if (inflight) $('#topbar').classList.add('on'); }, 250); }
+function netEnd() { inflight = Math.max(0, inflight - 1); if (!inflight) { clearTimeout(topT); $('#topbar').classList.remove('on'); } }
+async function withBusy(guard, fn, spin = guard) {
+  if (!guard) return fn();
+  if (guard.dataset.busy) return; // already running: ignore the extra click / Enter
+  guard.dataset.busy = '1'; spin?.classList.add('loading'); if (spin && 'disabled' in spin) spin.disabled = true;
+  try { return await fn(); } finally { delete guard.dataset.busy; spin?.classList.remove('loading'); if (spin && 'disabled' in spin) spin.disabled = false; }
+}
+const markBusy = (id) => $(`.card[data-id="${id}"]`)?.classList.add('busy');
+function tErr(msg) { // server messages are English; show them in the chosen language
+  msg = String(msg); if (lang === 'en') return msg;
+  for (const [re, k] of ERRS) { const m = re.exec(msg); if (m) return t(k, ...m.slice(1)); }
+  return msg;
+}
 const today = () => new Date().toISOString().slice(0, 10);
 const daysFrom = (iso) => Math.round((Date.parse(iso) - Date.parse(today())) / 864e5);
 const fmtDur = (ms) => { if (!isFinite(ms)) return '—'; const h = ms / 36e5; return h < 24 ? `${h.toFixed(1)} ${t('h')}` : `${(h / 24).toFixed(1)} ${t('d')}`; };
 
 // ---------- api ----------
-async function api(method, path, body) {
-  const r = await fetch('/api' + path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  const d = await r.json();
+async function api(method, path, body, quiet) {
+  if (!quiet) netStart();
+  try { return await api0(method, path, body); } finally { if (!quiet) netEnd(); }
+}
+async function api0(method, path, body) {
+  let r; try { r = await fetch('/api' + path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); }
+  catch { throw new Error(t('e_net') === 'e_net' ? 'Cannot reach the server. Try again.' : t('e_net')); }
+  const d = await r.json().catch(() => ({}));
   if (r.status === 401 && path !== '/login') showLogin();
-  if (!r.ok) { const er = new Error(d.error || r.status); er.data = d; throw er; }
+  if (!r.ok) { const er = new Error(tErr(d.error || r.status)); er.data = d; throw er; }
   return d;
 }
 async function makeThumb(file) { // small JPEG preview kept forever, even after the original is recycled
@@ -50,9 +88,13 @@ async function makeThumb(file) { // small JPEG preview kept forever, even after 
   } catch { return null; }
 }
 async function uploadFile(cardId, file) {
+  netStart();
+  try { return await uploadFile0(cardId, file); } finally { netEnd(); }
+}
+async function uploadFile0(cardId, file) {
   const r = await fetch(`/api/cards/${cardId}/files`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) }, body: file });
   const d = await r.json();
-  if (!r.ok) throw new Error(d.error || r.status);
+  if (!r.ok) throw new Error(tErr(d.error || r.status));
   const nf = d.files.at(-1);
   if (nf && !nf.thumb) { const tb = await makeThumb(file); if (tb) await fetch(`/api/cards/${cardId}/files/${nf.id}/thumb`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: tb }).catch(() => {}); }
   return d;
@@ -83,17 +125,44 @@ async function attach(cardId, files) {
   return ok;
 }
 
-async function load() {
+// live updates: an SSE stream tells us "something changed"; /state returns nothing when we're already up to date
+let rev = 0, loadQ = Promise.resolve(), flash = new Set(), pendingLoad = false, es = null;
+const typingInDetail = () => document.activeElement?.matches('#viewBody textarea,#viewBody input:not([type=checkbox]):not([type=file])');
+function load(force) { loadQ = loadQ.then(() => doLoad(force)).catch((e) => console.error(e)); return loadQ; }
+async function doLoad(force) {
   if (!user) return;
-  try {
-    const sig = () => (openId ? JSON.stringify(cards.find((c) => c.id === openId)) : '');
-    const before = sig();
-    [cards, users] = await Promise.all([api('GET', '/cards'), api('GET', '/users')]);
-    renderAll();
-    // re-render the open card only if it changed (keeps videos playing and inputs focused)
-    if (openId && $('#viewDlg').open && sig() !== before && !document.activeElement?.matches('#viewBody textarea,#viewBody input:not([type=checkbox]):not([type=file])')) showCard(openId, true);
-  } catch (e) { console.error(e); }
+  if (dragId) { pendingLoad = true; return; } // don't yank the board while someone is dragging
+  const st = await api('GET', `/state?since=${force ? 0 : rev}`, undefined, true);
+  if (st.unchanged) return;
+  const sig = () => (openId ? JSON.stringify(cards.find((c) => c.id === openId)) : '');
+  const before = sig(), old = new Map(cards.map((c) => [c.id, c]));
+  rev = st.rev; cards = st.cards; users = st.users;
+  announce(old);
+  loadedOnce = true;
+  renderAll(); bootHide();
+  if (openId && $('#viewDlg').open) {
+    if (!cards.some((c) => c.id === openId)) { $('#viewDlg').close(); toast(t('card_gone')); }
+    else if (sig() !== before && !typingInDetail()) showCard(openId, true); // keeps videos playing and inputs focused
+  }
 }
+function announce(old) { // glow the cards other people changed, and say what happened
+  if (!loadedOnce) return;
+  const msgs = [];
+  for (const c of cards) {
+    const prev = old.get(c.id); if (prev && prev.updated_at === c.updated_at && prev.status === c.status) continue;
+    const last = c.history.at(-1); if (!last || last.user === user.email) continue; // my own actions need no highlight
+    flash.add(c.id);
+    if (msgs.length < 2) msgs.push(`${nameOf(last.user)} · #${c.id} ${t('a_' + last.action)}`);
+  }
+  if (msgs.length) toast(msgs.join('  |  '));
+  setTimeout(() => { flash.clear(); $$('.card.flash').forEach((el) => el.classList.remove('flash')); }, 2600);
+}
+function startEvents() {
+  if (es || !window.EventSource) return;
+  es = new EventSource('/api/events'); es.onmessage = () => load(); // the browser reconnects by itself if the stream drops
+}
+function stopEvents() { es?.close(); es = null; rev = 0; }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 
 // ---------- language ----------
 function applyLang() {
@@ -112,7 +181,7 @@ function setLang(l) { lang = l; try { localStorage.setItem('geckoboard.lang', l)
 $$('#langSeg button,[data-langseg] button').forEach((b) => (b.onclick = () => setLang(b.dataset.v)));
 
 // ---------- login / user ----------
-function showLogin() { user = null; $('#userBox').innerHTML = ''; if (!$('#loginDlg').open) $('#loginDlg').showModal(); initLogin(); }
+function showLogin() { bootHide(); user = null; stopEvents(); $('#userBox').innerHTML = ''; if (!$('#loginDlg').open) $('#loginDlg').showModal(); initLogin(); }
 function renderUserBox() {
   const u = user;
   $('#userBox').innerHTML = `<div class="chip" id="chip"><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
@@ -126,8 +195,8 @@ function renderUserBox() {
 function setUser(u) {
   user = u; $('#loginDlg').close();
   if (window.__showHelp) { window.__showHelp = false; $('#helpBtn').click(); }
-  renderUserBox();
-  load().then(openFromHash);
+  renderUserBox(); startEvents();
+  load(true).then(openFromHash);
 }
 document.addEventListener('click', (e) => { $('#menu')?.classList.remove('show'); if (!e.target.closest('.bellbox')) $('#bellMenu').classList.remove('show'); });
 const mcpCmd = (tok) => `claude mcp add --scope user --transport http geckoboard ${location.origin}/mcp --header "Authorization: Bearer ${tok}"`;
@@ -141,7 +210,7 @@ async function copyText(text, btn, key = 'copy') {
 }
 $('#copyBtn').onclick = () => copyText($('#tokenCmd').textContent, $('#copyBtn'));
 $('#copyJsonBtn').onclick = () => copyText($('#tokenJson').textContent, $('#copyJsonBtn'));
-$('#rotateBtn').onclick = async () => { if (!confirm(t('confirm_rotate'))) return; try { showToken((await api('POST', '/me/rotate-token', {})).token); } catch (e) { alert(e.message); } };
+$('#rotateBtn').onclick = () => { if (!confirm(t('confirm_rotate'))) return; withBusy($('#rotateBtn'), async () => { try { showToken((await api('POST', '/me/rotate-token', {})).token); } catch (e) { alert(e.message); } }); };
 async function menuAct(m) {
   if (m === 'out') { await api('POST', '/logout', {}); showLogin(); }
   if (m === 'token') { const me = await api('GET', '/me'); showToken(me.token); $('#tokenDlg').showModal(); }
@@ -163,7 +232,9 @@ function renderTeam() {
 }
 $('#addUserForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  try { await api('POST', '/users', Object.fromEntries(new FormData(e.target))); e.target.reset(); $('#teamErr').textContent = ''; await load(); renderTeam(); } catch (err) { $('#teamErr').textContent = err.message; }
+  await withBusy(e.target, async () => {
+    try { await api('POST', '/users', Object.fromEntries(new FormData(e.target))); e.target.reset(); $('#teamErr').textContent = ''; await load(); renderTeam(); } catch (err) { $('#teamErr').textContent = err.message; }
+  }, e.target.querySelector('button.primary'));
 });
 const fmtB = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.round(n / 1e3) + ' KB');
 async function renderStorage() {
@@ -173,9 +244,9 @@ async function renderStorage() {
     <div class="meta">${t('storage_files', s.files, s.purged, s.pinned)}</div>
     <div class="meta">${t('storage_policy', s.keepDays)}</div>`;
 }
-$('#storClean').onclick = async () => {
+$('#storClean').onclick = () => withBusy($('#storClean'), async () => {
   try { const r = await api('POST', '/storage/recycle', {}); await renderStorage(); await load(); toast(r.purged ? t('cleaned', fmtB(r.freed)) : t('nothing_to_clean')); } catch (e) { toast(e.message); }
-};
+});
 let cfg = null;
 async function initLogin() {
   cfg = cfg || await api('GET', '/config');
@@ -193,7 +264,9 @@ async function initLogin() {
 }
 $('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  try { setUser(await api('POST', '/login', Object.fromEntries(new FormData(e.target)))); } catch (err) { $('#loginErr').textContent = err.message; }
+  await withBusy(e.target, async () => {
+    try { setUser(await api('POST', '/login', Object.fromEntries(new FormData(e.target)))); } catch (err) { $('#loginErr').textContent = err.message; }
+  }, e.target.querySelector('button.primary'));
 });
 $('#loginDlg').addEventListener('cancel', (e) => e.preventDefault());
 
@@ -205,6 +278,7 @@ function matches(c) {
   if (F.pri && c.priority !== F.pri) return false;
   if (F.tag && !c.tags.includes(F.tag)) return false;
   if (F.ms && c.milestone !== F.ms) return false;
+  if (F.need && !needsMe(c)) return false;
   if (F.own === '__none' ? c.assignees.length : F.own && !c.assignees.includes(F.own)) return false;
   if (F.q) {
     const q = F.q.toLowerCase().trim();
@@ -213,8 +287,30 @@ function matches(c) {
   }
   return true;
 }
-const anyFilter = () => Object.values(F).some(Boolean);
+const anyFilter = () => Object.keys(F0).some((k) => F[k] !== F0[k]);
+function needsMe(c) {
+  if (!user) return false;
+  const mineIP = c.assignees.includes(user.email) && c.status === 'in_progress';
+  if (user.role === 'tester') return c.status === 'ready_to_test';
+  if (user.role === 'dev') return mineIP;
+  return c.status === 'ready_to_test' || mineIP;
+}
+function renderNeed() {
+  const n = cards.filter(needsMe).length, b = $('#needBtn');
+  b.innerHTML = `${t('need_' + (user?.role || 'dev'))}<b>${n}</b>`; b.classList.toggle('on', F.need); b.setAttribute('aria-pressed', F.need);
+  document.title = n ? `(${n}) GeckoBoard` : 'GeckoBoard';
+  const sb = $('#sortBtn'); sb.textContent = t('sort_' + sortMode); sb.title = t('sort_tip_' + sortMode); sb.classList.toggle('on', sortMode === 'manual');
+}
+$('#needBtn').onclick = () => { F.need = !F.need; saveF(); renderNeed(); renderBoard(); $('#fclear').hidden = !anyFilter(); };
+$('#sortBtn').onclick = () => { sortMode = sortMode === 'auto' ? 'manual' : 'auto'; try { localStorage.setItem('geckoboard.sort', sortMode); } catch { /* ignore */ } renderNeed(); renderBoard(); };
+function syncControls() { // reflect restored filters in the UI
+  $('#fq').value = F.q;
+  $$('#typeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === F.type));
+  $$('#whoSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === F.who));
+}
+const epos = (c) => c.pos ?? Date.parse(c.created_at);
 function sortCards(a, b) {
+  if (sortMode === 'manual') return epos(a) - epos(b);
   return (PRI_W[a.priority] - PRI_W[b.priority]) || ((a.due || '9999').localeCompare(b.due || '9999')) || b.updated_at.localeCompare(a.updated_at);
 }
 function fillSelect(sel, first, opts, cur) {
@@ -230,17 +326,17 @@ function renderFilters() {
   $('#msList').innerHTML = mss.map((x) => `<option value="${esc(x)}">`).join('');
   F.pri = $('#fpri').value; F.tag = $('#ftag').value; F.own = $('#fown').value; F.ms = $('#fms').value;
   $('#fclear').hidden = !anyFilter();
+  renderNeed();
 }
-['#fpri', '#ftag', '#fown', '#fms'].forEach((id) => ($(id).onchange = () => { F.pri = $('#fpri').value; F.tag = $('#ftag').value; F.own = $('#fown').value; F.ms = $('#fms').value; renderBoard(); $('#fclear').hidden = !anyFilter(); }));
-$('#fq').oninput = () => { F.q = $('#fq').value; renderBoard(); $('#fclear').hidden = !anyFilter(); };
+['#fpri', '#ftag', '#fown', '#fms'].forEach((id) => ($(id).onchange = () => { F.pri = $('#fpri').value; F.tag = $('#ftag').value; F.own = $('#fown').value; F.ms = $('#fms').value; saveF(); renderBoard(); $('#fclear').hidden = !anyFilter(); }));
+$('#fq').oninput = () => { F.q = $('#fq').value; saveF(); renderBoard(); $('#fclear').hidden = !anyFilter(); };
 $('#fclear').onclick = () => {
-  Object.assign(F, { type: '', who: '', q: '', pri: '', tag: '', own: '', ms: '' }); $('#fq').value = '';
-  $$('#typeSeg button,#whoSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === ''));
+  Object.assign(F, F0); saveF(); syncControls();
   renderFilters(); renderBoard();
 };
 for (const [id, key] of [['#typeSeg', 'type'], ['#whoSeg', 'who']]) {
   $$(id + ' button').forEach((b) => (b.onclick = () => {
-    $$(id + ' button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); F[key] = b.dataset.v; renderBoard(); $('#fclear').hidden = !anyFilter();
+    $$(id + ' button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); F[key] = b.dataset.v; saveF(); renderBoard(); $('#fclear').hidden = !anyFilter();
   }));
 }
 
@@ -260,10 +356,10 @@ function cardHtml(c) {
   else if (lockedByOther && canTick) ctl = `<span class="lock" title="${esc(t('claimed_by', nameOf(owner)))}">${LOCK}</span>`;
   const claim = owner ? `<div class="claim${mine ? ' me' : ''}">${avatar(owner)}<span>${mine ? `<b>${t('you')}</b>` : `<b>${esc(nameOf(owner))}</b>`} · ${t(c.status === 'complete' ? 'did_it' : 'working')}</span></div>` : '';
   const chips = [dueChip(c), c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : '',
-    c.parent ? `<span class="pill">↳ #${c.parent}</span>` : '', cards.some((x) => x.parent === c.id) ? `<span class="pill">⑂ ${cards.filter((x) => x.parent === c.id).length}</span>` : '',
+    c.parent && cards.some((x) => x.id === c.parent) ? `<span class="pill">↳ #${c.parent}</span>` : '', cards.some((x) => x.parent === c.id) ? `<span class="pill">⑂ ${cards.filter((x) => x.parent === c.id).length}</span>` : '',
     c.files.length ? `<span class="pill">📎 ${c.files.length}</span>` : '',
 ].filter(Boolean).join('');
-  return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}" data-id="${c.id}" draggable="true">
+  return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}${flash.has(c.id) ? ' flash' : ''}" data-id="${c.id}" draggable="true">
     <div class="row">${ctl}<span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
     <span class="meta pri-${c.priority}" style="margin-left:auto">${t('pri_' + c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>
@@ -271,6 +367,10 @@ function cardHtml(c) {
     ${chips ? `<div class="chiprow">${chips}</div>` : ''}${claim}</div>`;
 }
 function renderBoard() {
+  if (loadedOnce && !cards.length && user) { // brand-new board: guide the first step
+    $('#board').innerHTML = `<div class="onb"><div class="big">🦎</div><h2>${t('onb_title')}</h2><p>${t('onb_sub')}</p><button class="btn primary" id="onbNew">${t('onb_btn')}</button></div>`;
+    $('#onbNew').onclick = () => openCardDlg(null); $('#tabs').innerHTML = ''; return;
+  }
   const vis = cards.filter(matches);
   $('#board').innerHTML = COLS.map(([k, col]) => {
     let list = vis.filter((c) => c.status === k).sort(sortCards);
@@ -280,50 +380,78 @@ function renderBoard() {
       if (old.length && !showOld) { list = list.filter((c) => !old.includes(c)); oldBtn = `<button class="oldbtn" data-old="1">${t('show_old', old.length)}</button>`; }
       else if (old.length) oldBtn = `<button class="oldbtn" data-old="0">${t('hide_old')}</button>`;
     }
-    return `<section class="col${mcol === k ? ' active' : ''}" data-status="${k}"><h2><span class="dot" style="background:var(${col})"></span>${t('s_' + k)}<span class="count">${list.length}</span></h2>`
-      + (list.map(cardHtml).join('') || `<div class="empty">${anyFilter() ? t('no_match') : '—'}</div>`) + oldBtn + '</section>';
+    const mineN = user ? list.filter((c) => c.assignees.includes(user.email)).length : 0;
+    const hot = role('tester') && k === 'ready_to_test' && list.length > 0;
+    const empty = anyFilter() ? t('no_match') : t('empty_' + k);
+    return `<section class="col${mcol === k ? ' active' : ''}" data-status="${k}"><h2><span class="dot" style="background:var(${col})"></span>${t('s_' + k)}
+      <span class="cnt">${mineN && role('dev', 'admin') ? `<span class="count me" title="${t('mine')}">👤 ${mineN}</span>` : ''}<span class="count${hot ? ' hot' : ''}">${list.length}</span></span></h2>`
+      + (list.map(cardHtml).join('') || `<div class="empty">${empty}</div>`) + oldBtn + '</section>';
   }).join('');
   $('#tabs').innerHTML = COLS.map(([k]) => `<button data-s="${k}" class="${mcol === k ? 'on' : ''}">${t('s_' + k)} · ${vis.filter((c) => c.status === k).length}</button>`).join('');
   $$('#tabs button').forEach((b) => (b.onclick = () => { mcol = b.dataset.s; renderBoard(); }));
 }
 function renderAll() { renderFilters(); renderBoard(); renderBell(); }
 
+// Undo: every state change offers a button for a few seconds (the server only lets you undo your own last action)
+function undoToast(id, key) { toast(t(key, id), { label: t('undo'), fn: async () => { await api('POST', `/cards/${id}/undo`, {}); await load(); toast(t('undone')); } }); }
+function restoreToast(id) { toast(t('u_deleted', id), { label: t('undo'), fn: async () => { await api('POST', `/trash/${id}/restore`, {}); await load(); toast(t('u_restored', id)); } }); }
+
 // board interactions: tick-to-claim, open card, "show older"
+
 $('#board').addEventListener('click', async (e) => {
   const old = e.target.closest('[data-old]');
   if (old) { showOld = old.dataset.old === '1'; return renderBoard(); }
   const box = e.target.closest('input[data-claim]');
   if (box) {
     e.stopPropagation(); box.disabled = true;
-    try { await api('POST', `/cards/${box.dataset.claim}/${box.checked ? 'claim' : 'unclaim'}`, {}); }
+    const id = +box.dataset.claim, claiming = box.checked; markBusy(id);
+    try { await api('POST', `/cards/${id}/${claiming ? 'claim' : 'unclaim'}`, {}); await load(); undoToast(id, claiming ? 'u_claimed' : 'u_released'); }
     catch (err) { await load(); toast(err.data?.claimed_by ? t('already', nameOf(err.data.claimed_by)) : err.message); }
-    await load(); return;
+    return;
   }
   if (e.target.closest('.chk')) return;
   const el = e.target.closest('.card'); if (el) showCard(+el.dataset.id);
 });
-// drag & drop between columns
+// drag & drop: between columns changes status; inside a column it reorders (manual order mode)
+let dropTarget = null; // { id, after } while hovering a card in manual mode
+const clearDrop = () => $$('.drop-before,.drop-after,.col.over').forEach((x) => x.classList.remove('drop-before', 'drop-after', 'over'));
 $('#board').addEventListener('dragstart', (e) => { const el = e.target.closest('.card'); if (!el) return; dragId = +el.dataset.id; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragId)); });
-$('#board').addEventListener('dragend', () => { dragId = null; $$('.dragging,.over').forEach((x) => x.classList.remove('dragging', 'over')); });
-$('#board').addEventListener('dragover', (e) => { const col = e.target.closest('.col'); if (col && dragId) { e.preventDefault(); $$('.col.over').forEach((x) => x !== col && x.classList.remove('over')); col.classList.add('over'); } });
+$('#board').addEventListener('dragend', () => { dragId = null; dropTarget = null; $$('.dragging').forEach((x) => x.classList.remove('dragging')); clearDrop(); if (pendingLoad) { pendingLoad = false; load(); } });
+$('#board').addEventListener('dragover', (e) => {
+  const col = e.target.closest('.col'); if (!col || !dragId) return; e.preventDefault();
+  clearDrop(); col.classList.add('over'); dropTarget = null;
+  const src = cards.find((x) => x.id === dragId), over = e.target.closest('.card');
+  if (sortMode === 'manual' && src && src.status === col.dataset.status && over && +over.dataset.id !== dragId) {
+    const r = over.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+    over.classList.add(after ? 'drop-after' : 'drop-before'); col.classList.remove('over'); dropTarget = { id: +over.dataset.id, after };
+  }
+});
 $('#board').addEventListener('drop', async (e) => {
   const col = e.target.closest('.col'); if (!col || !dragId) return; e.preventDefault();
-  const c = cards.find((x) => x.id === dragId); const to = col.dataset.status; dragId = null; $$('.over').forEach((x) => x.classList.remove('over'));
-  if (c) await moveCard(c, to);
+  const c = cards.find((x) => x.id === dragId), to = col.dataset.status, target = dropTarget; dragId = null; dropTarget = null; clearDrop();
+  if (!c) return;
+  if (c.status === to) return reorder(c, col, target);
+  await moveCard(c, to);
 });
+async function reorder(c, col, target) {
+  if (sortMode !== 'manual') return toast(t('manual_hint'), { label: t('manual_on'), fn: () => $('#sortBtn').click() }, 6000);
+  const ids = [...col.querySelectorAll('.card')].map((el) => +el.dataset.id).filter((id) => id !== c.id); // visible order without the dragged card
+  let at = ids.length; // default: end of the column
+  if (target) at = ids.indexOf(target.id) + (target.after ? 1 : 0);
+  markBusy(c.id);
+  try { await api('POST', `/cards/${c.id}/move`, { after: ids[at - 1] || null, before: ids[at] || null }); await load(); } catch (err) { toast(err.message); }
+}
 async function moveCard(c, to) {
   const from = c.status; if (from === to) return;
   const mine = c.assignees.includes(user.email);
+  if (['open-in_progress', 'in_progress-open', 'ready_to_test-complete', 'complete-open', 'complete-in_progress'].includes(`${from}-${to}`)) markBusy(c.id);
   try {
-    if (from === 'open' && to === 'in_progress' && role('dev', 'admin')) await api('POST', `/cards/${c.id}/claim`, {});
-    else if (from === 'in_progress' && to === 'open' && (mine || role('admin'))) await api('POST', `/cards/${c.id}/unclaim`, mine ? {} : { email: c.assignees[0] });
-    else if (from === 'ready_to_test' && to === 'complete' && role('tester', 'admin')) {
-      await api('POST', `/cards/${c.id}/pass`, {});
-    } else if (from === 'ready_to_test' && to === 'in_progress' && role('tester', 'admin')) {
-      return openFailDlg(c);
-    } else if (from === 'complete' && (to === 'open' || to === 'in_progress') && role('tester', 'admin')) await api('POST', `/cards/${c.id}/reopen`, {});
+    if (from === 'open' && to === 'in_progress' && role('dev', 'admin')) { await api('POST', `/cards/${c.id}/claim`, {}); await load(); return undoToast(c.id, 'u_claimed'); }
+    else if (from === 'in_progress' && to === 'open' && (mine || role('admin'))) { await api('POST', `/cards/${c.id}/unclaim`, mine ? {} : { email: c.assignees[0] }); await load(); return undoToast(c.id, 'u_released'); }
+    else if (from === 'ready_to_test' && to === 'complete' && role('tester', 'admin')) { await api('POST', `/cards/${c.id}/pass`, {}); await load(); return undoToast(c.id, 'u_passed'); }
+    else if (from === 'ready_to_test' && to === 'in_progress' && role('tester', 'admin')) return openFailDlg(c);
+    else if (from === 'complete' && (to === 'open' || to === 'in_progress') && role('tester', 'admin')) await api('POST', `/cards/${c.id}/reopen`, {});
     else if (from === 'in_progress' && to === 'ready_to_test' && role('dev', 'admin')) { if (mine || role('admin')) return openReadyDlg(c); return toast(t('move_not_yours')); }
-    else if (to === 'ready_to_test') return toast(t('move_no'));
     else return toast(t('move_no'));
   } catch (err) { toast(err.data?.claimed_by ? t('already', nameOf(err.data.claimed_by)) : err.message); }
   await load();
@@ -331,7 +459,7 @@ async function moveCard(c, to) {
 
 // ---------- card detail ----------
 function linkRow(id, removable, kind) {
-  const c = cards.find((x) => x.id === id);
+  const c = cards.find((x) => x.id === id); if (!c) return '';
   return `<div class="lnk"><a data-open="${id}">#${id} ${esc(c?.title || '?')}</a><span class="pill">${c ? t('s_' + c.status) : ''}</span>${removable ? `<button class="x" data-unlink="${id}" data-kind="${kind}" title="${t('unlink')}">✕</button>` : ''}</div>`;
 }
 function mdText(c) {
@@ -392,9 +520,9 @@ function showCard(id, keep) {
       <ol class="steps" style="font-size:14px">${c.test_steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>` : ''}
     <div class="actions">${acts.join('')}</div>
     <div class="sec"><h4>${t('links')}</h4>
-      ${c.parent ? `<div class="meta">${t('parent_of')}</div>${linkRow(c.parent, canEdit, 'parent')}` : ''}
+      ${c.parent && cards.some((x) => x.id === c.parent) ? `<div class="meta">${t('parent_of')}</div>${linkRow(c.parent, canEdit, 'parent')}` : ''}
       ${kids.length ? `<div class="meta">${t('subcards')}</div>${kids.map((k) => linkRow(k.id, false)).join('')}` : ''}
-      ${c.related.length ? `<div class="meta">${t('related')}</div>${c.related.map((r) => linkRow(r, true, 'related')).join('')}` : ''}
+      ${c.related.some((r) => cards.some((x) => x.id === r)) ? `<div class="meta">${t('related')}</div>${c.related.map((r) => linkRow(r, true, 'related')).join('')}` : ''}
       <div class="row" style="margin-top:6px"><input id="linkId" type="number" min="1" placeholder="${t('add_related')}" style="width:120px"><button class="btn" data-a="link">${t('link')}</button>
         ${canEdit ? `<input id="parentId" type="number" min="1" placeholder="${t('set_parent')}" style="width:120px;margin-left:8px"><button class="btn" data-a="setparent">${t('save')}</button>` : ''}</div></div>
     <div class="sec"><h4>${t('comments')}</h4>
@@ -415,7 +543,7 @@ function wireDetail(c) {
   $$('#viewBody [data-unlink]').forEach((b) => (b.onclick = async () => {
     try { if (b.dataset.kind === 'parent') await api('PATCH', `/cards/${c.id}`, { parent: null }); else await api('POST', `/cards/${c.id}/unlink`, { id: +b.dataset.unlink }); await load(); } catch (e) { toast(e.message); }
   }));
-  $$('#viewBody [data-lb]').forEach((img) => (img.onclick = () => { $('#lbImg').src = `/api/files/${img.dataset.lb}`; $('#lbDlg').showModal(); }));
+  $$('#viewBody [data-lb]').forEach((img) => (img.onclick = () => openLightbox(c.files.filter((f) => !f.purged && f.mime.startsWith('image/')), img.dataset.lb)));
   $$('#viewBody [data-gone]').forEach((el) => (el.onclick = () => toast(t('recycled_note'))));
   $$('#viewBody [data-pin]').forEach((b) => (b.onclick = async () => { try { await api('PATCH', `/cards/${c.id}/files/${b.dataset.pin}`, { pinned: b.dataset.on !== '1' }); await load(); } catch (e) { toast(e.message); } }));
   $$('#viewBody [data-rmfile]').forEach((b) => (b.onclick = async () => { if (!confirm(t('confirm_remove_file', b.dataset.name))) return; try { await api('DELETE', `/cards/${c.id}/files/${b.dataset.rmfile}`); await load(); } catch (e) { toast(e.message); } }));
@@ -437,7 +565,7 @@ function wireDetail(c) {
     $$('#sugg div').forEach((d) => (d.onmousedown = (ev) => { ev.preventDefault(); const pos = cmt.selectionStart; cmt.value = cmt.value.slice(0, pos).replace(/@([\p{L}\p{N}_.\-]*)$/u, '@' + d.dataset.n + ' ') + cmt.value.slice(pos); sg.hidden = true; cmt.focus(); }));
   };
   cmt.onblur = () => setTimeout(() => (sg.hidden = true), 150);
-  cmt.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); act(c, 'comment'); } };
+  cmt.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); act(c, 'comment', $('#viewBody [data-a=comment]')); } };
 }
 // Ctrl+V a screenshot (or several): into the open form/card, or anywhere on the board to start a new card with it
 document.addEventListener('paste', (e) => {
@@ -455,7 +583,9 @@ $('#failCancel').onclick = () => $('#failDlg').close();
 $('#failForm').addEventListener('submit', async (e) => {
   e.preventDefault(); const text = e.target.text.value.trim();
   if (!text) { $('#failErr').textContent = t('fail_need'); return; }
-  try { await api('POST', `/cards/${failFor.id}/fail`, { text }); $('#failDlg').close(); $('#viewDlg').close(); await load(); } catch (err) { $('#failErr').textContent = err.message; }
+  await withBusy(e.target, async () => {
+  try { const id = failFor.id; await api('POST', `/cards/${id}/fail`, { text }); $('#failDlg').close(); $('#viewDlg').close(); await load(); undoToast(id, 'u_failed'); } catch (err) { $('#failErr').textContent = err.message; }
+  }, e.target.querySelector('button.bad'));
 });
 let readyFor = null;
 function openReadyDlg(c) {
@@ -468,10 +598,16 @@ $('#readyForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const steps = e.target.steps.value.split('\n').map((x) => x.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
   if (!steps.length) { $('#readyErr').textContent = t('ready_need'); return; }
-  try { await api('POST', `/cards/${readyFor.id}/ready`, { summary: e.target.summary.value, test_steps: steps }); $('#readyDlg').close(); await load(); }
+  await withBusy(e.target, async () => {
+  try { const id = readyFor.id, wasIP = readyFor.status === 'in_progress'; await api('POST', `/cards/${id}/ready`, { summary: e.target.summary.value, test_steps: steps }); $('#readyDlg').close(); await load(); if (wasIP) undoToast(id, 'u_ready'); }
   catch (err) { $('#readyErr').textContent = err.message; }
+  }, e.target.querySelector('button.primary'));
 });
-async function act(c, a, btn) {
+function act(c, a, btn) {
+  if (['close', 'edit', 'copytext', 'ready', 'fail'].includes(a)) return actInner(c, a, btn);
+  return withBusy(btn, () => actInner(c, a, btn)); // one request at a time per button
+}
+async function actInner(c, a, btn) {
   if (a === 'close') return $('#viewDlg').close();
   if (a === 'ready') return openReadyDlg(c);
   if (a === 'edit') return openCardDlg(c);
@@ -485,7 +621,7 @@ async function act(c, a, btn) {
     }
     if (a === 'delete') {
       if (!confirm(t('confirm_delete', c.id, c.title))) return;
-      await api('DELETE', '/cards/' + c.id); $('#viewDlg').close(); return await load();
+      await api('DELETE', '/cards/' + c.id); $('#viewDlg').close(); await load(); return restoreToast(c.id);
     }
     const body = {};
     if (a === 'comment') { body.text = $('#cmt').value; if (!body.text.trim()) return; }
@@ -493,11 +629,27 @@ async function act(c, a, btn) {
     try { await api('POST', `/cards/${c.id}/${a}`, body); }
     catch (er) { await load(); if (er.data?.claimed_by) { toast(t('already', nameOf(er.data.claimed_by))); return; } throw er; }
     await load();
-    if (a === 'pass' || a === 'fail') $('#viewDlg').close();
+    if (a === 'pass') { $('#viewDlg').close(); undoToast(c.id, 'u_passed'); }
+    else if (a === 'claim') undoToast(c.id, 'u_claimed');
+    else if (a === 'unclaim') undoToast(c.id, 'u_released');
   } catch (e) { toast(e.message); }
 }
 $('#viewDlg').addEventListener('close', () => { openId = null; if (location.hash.startsWith('#card-')) history.replaceState(null, '', location.pathname); });
-$('#lbDlg').addEventListener('click', () => $('#lbDlg').close());
+// slideshow lightbox: ← → to move, click image to zoom, Esc to close
+let lb = { items: [], i: 0 };
+function openLightbox(items, id) { lb = { items, i: Math.max(0, items.findIndex((f) => f.id === id)) }; lbShow(); if (!$('#lbDlg').open) $('#lbDlg').showModal(); }
+function lbShow() {
+  const f = lb.items[lb.i]; if (!f) return;
+  $('#lbDlg').classList.remove('zoom'); $('#lbImg').src = `/api/files/${f.id}`; $('#lbImg').alt = f.name;
+  $('#lbCap').textContent = `${f.name}  (${lb.i + 1}/${lb.items.length})`; $('#lbDl').href = `/api/files/${f.id}`; $('#lbDl').download = f.name;
+  $('#lbPrev').hidden = $('#lbNext').hidden = lb.items.length < 2;
+  for (const d of [-1, 1]) { const n = lb.items[(lb.i + d + lb.items.length) % lb.items.length]; if (n) new Image().src = `/api/files/${n.id}`; } // preload neighbours
+}
+const lbGo = (d) => { if (lb.items.length < 2) return; lb.i = (lb.i + d + lb.items.length) % lb.items.length; lbShow(); };
+$('#lbPrev').onclick = () => lbGo(-1); $('#lbNext').onclick = () => lbGo(1); $('#lbClose').onclick = () => $('#lbDlg').close();
+$('#lbImg').onclick = (e) => { e.stopPropagation(); $('#lbDlg').classList.toggle('zoom'); };
+$('#lbWrap').onclick = () => $('#lbDlg').close();
+document.addEventListener('keydown', (e) => { if (!$('#lbDlg').open) return; if (e.key === 'ArrowLeft') lbGo(-1); else if (e.key === 'ArrowRight') lbGo(1); });
 
 // ---------- create / edit dialog ----------
 let editId = null, pending = [];
@@ -518,27 +670,48 @@ $('#newFiles').onchange = () => { addPending([...$('#newFiles').files]); $('#new
 $('#newDrop').ondragover = (e) => { e.preventDefault(); $('#newDrop').classList.add('over'); };
 $('#newDrop').ondragleave = () => $('#newDrop').classList.remove('over');
 $('#newDrop').ondrop = (e) => { e.preventDefault(); $('#newDrop').classList.remove('over'); addPending([...e.dataTransfer.files]); };
+const DRAFT_KEY = 'geckoboard.draft';
+const formState = () => JSON.stringify(Object.fromEntries(new FormData($('#cardForm'))));
+let cardInitial = '';
+const draftHasText = () => { const f = $('#cardForm'); return !!(f.title.value.trim() || f.description.value.trim() || f.tags.value.trim()); };
+let draftT; function saveDraft() { if (editId) return; clearTimeout(draftT); draftT = setTimeout(() => { try { if (draftHasText()) localStorage.setItem(DRAFT_KEY, formState()); else localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } }, 300); }
+const clearDraft = () => { clearTimeout(draftT); try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } };
 function openCardDlg(c) {
   editId = c ? c.id : null; pending = []; renderPending();
-  const f = $('#cardForm'); f.reset(); $('#cardErr').textContent = '';
+  const f = $('#cardForm'); f.reset(); $('#cardErr').textContent = ''; $('#draftBar').hidden = true;
   $('#cardDlgTitle').textContent = t(c ? 'edit_card' : 'newcard'); $('#cardSubmit').textContent = t(c ? 'save' : 'create');
   $('#newFilesRow').hidden = !!c;
   if (c) { f.type.value = c.type; f.priority.value = c.priority; f.title.value = c.title; f.description.value = c.description; f.tags.value = c.tags.join(', '); f.due.value = c.due; f.milestone.value = c.milestone; f.parent.value = c.parent || ''; }
+  else { // restore an unfinished draft
+    try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) { for (const k of Object.keys(d)) if (f[k]) f[k].value = d[k]; $('#draftBar').hidden = false; } } catch { /* ignore */ }
+  }
+  cardInitial = formState();
   $('#cardDlg').showModal();
 }
+$('#cardForm').addEventListener('input', saveDraft);
+$('#draftFresh').onclick = () => { clearDraft(); $('#cardForm').reset(); $('#draftBar').hidden = true; cardInitial = formState(); };
+function okToCloseCardDlg() { // Esc / Cancel: never lose work silently
+  if (editId) return formState() === cardInitial || confirm(t('discard_changes'));
+  if (pending.length && !confirm(t('discard_images', pending.length))) return false;
+  if (draftHasText()) { saveDraft(); toast(t('draft_saved')); }
+  return true;
+}
+$('#cardDlg').addEventListener('cancel', (e) => { if (!okToCloseCardDlg()) e.preventDefault(); });
 $('#newBtn').onclick = () => openCardDlg(null);
 $('#cardForm').addEventListener('submit', async (e) => {
   if (e.submitter?.value !== 'ok') return;
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target)); f.parent = f.parent ? +f.parent : null;
+  await withBusy(e.target, async () => {
   try {
     let card;
     if (editId) card = await api('PATCH', '/cards/' + editId, f);
-    else { card = await api('POST', '/cards', f); if (pending.length) { toast(t('uploading')); await attach(card.id, pending); pending = []; } }
+    else { card = await api('POST', '/cards', f); clearDraft(); if (pending.length) { toast(t('uploading')); await attach(card.id, pending); pending = []; } }
     $('#cardDlg').close(); await load(); if (editId) showCard(editId, true);
   } catch (err) { $('#cardErr').textContent = err.message; }
+  }, $('#cardSubmit'));
 });
-$('#cardForm').addEventListener('click', (e) => { if (e.target.value === 'cancel') { e.preventDefault(); $('#cardDlg').close(); } });
+$('#cardForm').addEventListener('click', (e) => { if (e.target.value === 'cancel') { e.preventDefault(); if (okToCloseCardDlg()) $('#cardDlg').close(); } });
 
 // ---------- summary ----------
 function stats() {
@@ -610,6 +783,29 @@ try { if (!localStorage.getItem('devboard.helpSeen')) { localStorage.setItem('de
 function openFromHash() { const m = /^#card-(\d+)$/.exec(location.hash); if (m && cards.some((c) => c.id === +m[1])) showCard(+m[1]); }
 window.addEventListener('hashchange', openFromHash);
 
+// keyboard shortcuts (ignored while typing or when a window is open)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.closest?.('dialog form')) { // Ctrl+Enter submits the form you're typing in
+    const form = e.target.closest('form'); const btn = form.querySelector('button.primary,button.bad'); if (btn) { e.preventDefault(); form.requestSubmit(btn); } return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey || !user) return;
+  if (e.key === 'Escape' && document.activeElement === $('#fq')) { $('#fq').blur(); return; }
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+  if (typing || $$('dialog[open]').length) return;
+  const k = e.key.toLowerCase();
+  if (k === 'n') { e.preventDefault(); openCardDlg(null); }
+  else if (e.key === '/') { e.preventDefault(); $('#fq').focus(); }
+  else if (e.key === '?') { e.preventDefault(); $('#helpBtn').click(); }
+  else if (k === 'm') $('#needBtn').click();
+});
+// phones: the secondary header controls and the filter selects fold away
+$('#hamb').onclick = () => { const o = $('#hx').classList.toggle('open'); $('#hamb').setAttribute('aria-expanded', o); };
+$('#fToggle').onclick = () => { const o = $('#fsel').classList.toggle('open'); $('#fToggle').setAttribute('aria-expanded', o); };
+
+$('#bootMsg').textContent = t('boot_msg');
+const bootT = setTimeout(() => { const el = $('#bootSlow'); if (el) { el.textContent = t('boot_slow'); el.hidden = false; } }, 4000);
+function bootHide() { clearTimeout(bootT); $('#boot')?.remove(); }
+syncControls();
 applyLang();
 api('GET', '/me').then(setUser).catch(showLogin);
-setInterval(() => { if (!document.hidden) load(); }, 5000);
+setInterval(() => { if (!document.hidden && user) load(); }, 20000); // safety net; the SSE stream does the real work

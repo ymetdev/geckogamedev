@@ -27,7 +27,9 @@ export function createServer({ base, token }) {
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
       'for details (use get_attachment to look at screenshots on the card), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
-      'summary and clear step-by-step manual test instructions for the tester. Never mark ready if the fix is unfinished.',
+      'summary and test steps for the tester. Never mark ready if the fix is unfinished. ' +
+      'WRITING STYLE for the summary and test_steps: write in THAI, in very simple everyday words, as short as possible, for a tester who is NOT a programmer. ' +
+      'No code, file, class or function names: describe what the tester does and sees in the game. One action per step, 3-6 steps, each step like "ทำ... → ควรเห็น: ...". The summary is 1-2 short Thai sentences saying what changed in plain words.',
   });
 
   server.registerTool('list_my_cards', {
@@ -69,12 +71,12 @@ export function createServer({ base, token }) {
 
   server.registerTool('mark_ready_for_test', {
     description:
-      'After the fix is DONE and verified, set the card to Ready to Test. Must include a short summary of what changed ' +
-      'and concrete manual test steps a (non-programmer) tester can follow, including expected results.',
+      'After the fix is DONE and verified, set the card to Ready to Test. Write summary and test_steps in THAI, simple everyday words, very short, ' +
+      'for a non-programmer tester (no code or file names; say what they do and what they should see). Example step: "กดปุ่มโจมตี → ควรเห็นแถบพลังลดลงทันที".',
     inputSchema: {
       id: z.number().int(),
-      summary: z.string().describe('What was changed / root cause, 1-4 sentences'),
-      test_steps: z.array(z.string()).min(1).describe('Ordered manual steps, each ending with the expected result where relevant'),
+      summary: z.string().describe('THAI, plain words, 1-2 short sentences: what changed (no code terms)'),
+      test_steps: z.array(z.string()).min(1).describe('THAI, very short, simple words, 3-6 steps, each "ทำ... → ควรเห็น: ..."; no code or file names'),
     },
   }, wrap(async ({ id, summary, test_steps }) => brief(await call('POST', `/cards/${id}/ready`, { summary, test_steps }))));
 
@@ -120,7 +122,7 @@ export function createServer({ base, token }) {
   }, () => ({
     messages: [{ role: 'user', content: { type: 'text', text:
       'Use GeckoBoard: list_my_cards, then for each card read it with get_card, implement the fix in this repo, ' +
-      'verify it, then call mark_ready_for_test with a summary and clear tester steps. Report what you did per card.' } }],
+      'verify it, then call mark_ready_for_test with a short Thai summary and 3-6 short, simple Thai test steps ("ทำ... → ควรเห็น: ...", no code terms). Report what you did per card.' } }],
   }));
   return server;
 }

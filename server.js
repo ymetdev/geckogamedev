@@ -14,6 +14,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const TOKENINFO_URL = process.env.GOOGLE_TOKENINFO_URL || 'https://oauth2.googleapis.com/tokeninfo';
 const INSECURE_LOGIN = process.env.ALLOW_INSECURE_EMAIL_LOGIN === '1'; // local dev only: email without verification
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
+const DISCORD_TESTER_ROLE_ID = (process.env.DISCORD_TESTER_ROLE_ID || '').replace(/\D/g, ''); // role to @mention when a card is ready to test
 const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(path.dirname(DB_FILE), 'uploads');
 const FILE_TYPES = { // allowed attachments: mime -> max bytes
@@ -33,6 +34,10 @@ const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 let db = { seq: 0, cards: [], users: [], sessions: {} };
 let writeChain = Promise.resolve();
+let rev = 1; // bumps on every change; browsers hold an SSE stream and refetch when it changes
+const sseClients = new Set();
+const broadcast = () => { for (const r of sseClients) { try { r.write(`data: ${rev}\n\n`); } catch { sseClients.delete(r); } } };
+const TRASH_DAYS = 7; // deleted cards can be restored (Undo) for this long
 // Storage: Postgres when DATABASE_URL is set (Render/Neon), otherwise a local JSON file.
 const DATABASE_URL = process.env.DATABASE_URL || '';
 if (DATABASE_URL) { // fail early with a readable message (never prints the password)
@@ -55,7 +60,7 @@ if (pool) {
 } else {
   try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
 }
-db.users ||= []; db.sessions ||= {};
+db.users ||= []; db.sessions ||= {}; db.trash ||= [];
 // one-time migration: files from the first version (id-addressed table / raw files) -> content-addressed blobs
 for (const c of db.cards) for (const f of c.files || []) {
   if (f.blob) continue;
@@ -86,17 +91,20 @@ if (ADMIN_EMAIL) {
 }
 await save();
 function save() {
+  rev++;
   const snapshot = JSON.stringify(db);
   if (pool) { // serialized so writes land in order; callers await durability
     const write = writeChain.then(() => pool.query(
       'INSERT INTO devboard_state (id, data) VALUES (1, $1::jsonb) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data', [snapshot]));
     writeChain = write.catch(() => {}); // a failed write must not block later ones
+    write.then(broadcast, () => {});
     return write;
   }
   fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, snapshot);
   fs.renameSync(tmp, DB_FILE);
+  broadcast();
   return Promise.resolve();
 }
 
@@ -125,11 +133,11 @@ const COLORS = { ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ad
 const DTXT = {
   en: { ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned', deleted: '🗑 Card deleted',
     dev: 'Dev', by: 'By', type: 'Type', priority: 'Priority', due: 'Due', ms: 'Milestone', tags: 'Tags', desc: 'Description', summary: 'What was done', steps: 'How to test',
-    more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
+    ping: '🧪 Card #{0} is ready for testing!', more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
     st: { open: 'Open', in_progress: 'In Progress', ready_to_test: 'Ready to Test', complete: 'Complete' }, pri: { low: 'low', medium: 'medium', high: 'high', critical: 'critical' } },
   th: { ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ', deleted: '🗑 ลบการ์ดแล้ว',
     dev: 'Dev', by: 'โดย', type: 'ประเภท', priority: 'ความสำคัญ', due: 'กำหนดส่ง', ms: 'Milestone', tags: 'Tag', desc: 'รายละเอียด', summary: 'สิ่งที่ทำ', steps: 'วิธีเทส',
-    more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
+    ping: '🧪 การ์ด #{0} พร้อมให้เทสแล้ว!', more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
     st: { open: 'เปิด', in_progress: 'กำลังทำ', ready_to_test: 'พร้อมเทส', complete: 'เสร็จสิ้น' }, pri: { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สูง', critical: 'วิกฤต' } },
 }[DLANG];
 const PRI_ICON = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' };
@@ -137,6 +145,7 @@ const cut = (s, n) => { s = String(s || '').trim(); return s.length > n ? s.slic
 function notify(event, card, actor, text = '') {
   if (!DISCORD_WEBHOOK_URL) return;
   const url = PUBLIC_URL ? `${PUBLIC_URL}/#card-${card.id}` : '';
+  const ping = event === 'ready_to_test' && !!DISCORD_TESTER_ROLE_ID;
   const owner = card.assignees[0] ? nameOfUser(card.assignees[0]) : DTXT.unassigned;
   const fields = [
     { name: DTXT.type, value: `${card.type === 'ticket' ? '🎫 Ticket' : '📋 Task'}`, inline: true },
@@ -169,7 +178,9 @@ function notify(event, card, actor, text = '') {
   };
   fetch(DISCORD_WEBHOOK_URL, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+    body: JSON.stringify(ping
+      ? { content: `<@&${DISCORD_TESTER_ROLE_ID}> ${DTXT.ping.replace('{0}', card.id)}`, embeds: [embed], allowed_mentions: { roles: [DISCORD_TESTER_ROLE_ID] } }
+      : { embeds: [embed], allowed_mentions: { parse: [] } }),
     signal: AbortSignal.timeout(5000),
   }).catch((e) => console.error('Discord notify failed:', e.message));
 }
@@ -215,18 +226,19 @@ async function delBlob(hash) { // remove everything for a blob nobody references
   if (pool) return pool.query('DELETE FROM devboard_blobs WHERE hash = $1', [hash]);
   for (const t of [false, true]) { try { fs.unlinkSync(fp(hash, t)); } catch { /* already gone */ } }
 }
-const allFiles = () => db.cards.flatMap((c) => c.files.map((f) => ({ f, c })));
+const allFiles = () => [...db.cards.map((c) => [c, false]), ...db.trash.map((c) => [c, true])].flatMap(([c, trash]) => c.files.map((f) => ({ f, c, trash })));
 async function releaseBlob(hash) { if (!allFiles().some(({ f }) => f.blob === hash)) await delBlob(hash); }
 
 // Recycler: frees space by purging original files (never the thumbnails), oldest/biggest-value-last first
 let recycling = false;
 function storageStats() {
   const blobs = new Map();
-  for (const { f, c } of allFiles()) {
+  for (const { f, c, trash } of allFiles()) {
     const b = blobs.get(f.blob) || { hash: f.blob, size: f.size, video: f.mime.startsWith('video/'), purged: !!f.purged, pinned: false, allDone: true, newest: '', oldest: f.at, latestCard: '' };
-    b.pinned ||= !!f.pinned; b.allDone &&= c.status === 'complete';
+    b.pinned ||= !!f.pinned; b.allDone &&= trash || c.status === 'complete';
     if (f.at > b.newest) b.newest = f.at; if (f.at < b.oldest) b.oldest = f.at;
-    if (c.updated_at > b.latestCard) b.latestCard = c.updated_at;
+    const stamp = trash ? c.deleted_at : c.updated_at;
+    if (stamp > b.latestCard) b.latestCard = stamp;
     blobs.set(f.blob, b);
   }
   const list = [...blobs.values()], live = list.filter((b) => !b.purged);
@@ -254,6 +266,18 @@ async function recycle({ protect = '' } = {}) {
     return { freed, purged };
   } finally { recycling = false; }
 }
+async function purgeTrash() { // really delete cards that stayed in the trash too long
+  const cutoff = Date.now() - TRASH_DAYS * 864e5;
+  const gone = db.trash.filter((c) => Date.parse(c.deleted_at) < cutoff);
+  if (!gone.length) return;
+  db.trash = db.trash.filter((c) => !gone.includes(c));
+  for (const card of gone) {
+    for (const c of db.cards) { c.related = c.related.filter((r) => r !== card.id); if (c.parent === card.id) c.parent = card.parent; }
+    for (const h of new Set(card.files.map((f) => f.blob))) await releaseBlob(h);
+  }
+  await save();
+}
+setInterval(() => purgeTrash().catch((e) => console.error('purgeTrash failed:', e.message)), 6 * 36e5);
 setInterval(() => recycle().catch((e) => console.error('recycle failed:', e.message)), 6 * 36e5);
 
 function readRaw(req, max) {
@@ -412,6 +436,31 @@ async function api(req, res, url) {
     return res.end(buf);
   }
 
+  // ---- live updates ----
+  if (parts[0] === 'events' && method === 'GET') { // Server-Sent Events: just a "something changed" ping with the revision number
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    res.write(`retry: 3000\ndata: ${rev}\n\n`);
+    sseClients.add(res);
+    const ka = setInterval(() => { try { res.write(': ka\n\n'); } catch { /* closed */ } }, 25000);
+    req.on('close', () => { clearInterval(ka); sseClients.delete(res); });
+    return;
+  }
+  if (parts[0] === 'state' && method === 'GET') { // cheap poll: nothing is sent back if nothing changed
+    if (Number(url.searchParams.get('since')) === rev) return sendJson(res, 200, { rev, unchanged: true });
+    return sendJson(res, 200, { rev, cards: db.cards, users: db.users.map(publicUser) });
+  }
+  if (parts[0] === 'trash' && parts[2] === 'restore' && method === 'POST') {
+    forbid(me, 'admin', 'dev');
+    const card = db.trash.find((c) => c.id === Number(parts[1]));
+    need(card, 404, 'Nothing to restore (it may have been removed for good)');
+    db.trash = db.trash.filter((c) => c !== card);
+    delete card.deleted_at; delete card.deleted_by;
+    db.cards.push(card);
+    log(card, user, 'restored');
+    await save();
+    return sendJson(res, 200, card);
+  }
+
   // ---- cards ----
   if (parts[0] === 'cards' && parts.length === 1 && method === 'GET') {
     let list = db.cards;
@@ -425,6 +474,8 @@ async function api(req, res, url) {
   if (parts[0] === 'cards' && parts.length === 1 && method === 'POST') {
     const title = clean(body.title, 200);
     need(title, 400, 'title required');
+    const dup = db.cards.find((c) => c.reporter === user && c.title === title && Date.now() - Date.parse(c.created_at) < 15000); // double-click / retry safety net
+    if (dup) return sendJson(res, 200, dup);
     const type = TYPES.includes(body.type) ? body.type : 'task';
     const priority = PRIORITIES.includes(body.priority) ? body.priority : 'medium';
     const tags = cleanTags(body.tags);
@@ -449,13 +500,12 @@ async function api(req, res, url) {
   const action = parts[2];
 
   if (!action && method === 'GET') return sendJson(res, 200, card);
-  if (!action && method === 'DELETE') {
+  if (!action && method === 'DELETE') { // soft delete: kept in the trash for TRASH_DAYS so it can be undone
     forbid(me, 'admin', 'dev');
     notify('deleted', card, user); // the team sees who deleted what
-    const hashes = card.files.map((f) => f.blob);
-    for (const c of db.cards) { c.related = c.related.filter((r) => r !== card.id); if (c.parent === card.id) c.parent = card.parent; }
-    db.cards = db.cards.filter((c) => c.id !== card.id);
-    for (const h of new Set(hashes)) await releaseBlob(h);
+    db.cards = db.cards.filter((c) => c !== card);
+    card.deleted_at = now(); card.deleted_by = user;
+    db.trash.push(card);
     await save();
     return sendJson(res, 200, { ok: true });
   }
@@ -515,9 +565,10 @@ async function api(req, res, url) {
     }
     case 'unclaim': {
       need(card.assignees.includes(user) || can(me, 'admin'), 403, 'Not your card');
-      card.assignees = card.assignees.filter((a) => a !== (body.email && can(me, 'admin') ? body.email : user));
+      const removed = body.email && can(me, 'admin') ? body.email : user;
+      card.assignees = card.assignees.filter((a) => a !== removed);
       if (card.assignees.length === 0 && card.status === 'in_progress') card.status = 'open';
-      log(card, user, 'unclaimed');
+      log(card, user, 'unclaimed', removed !== user ? removed : '');
       break;
     }
     case 'files': {
@@ -559,6 +610,39 @@ async function api(req, res, url) {
       }
       log(card, user, action === 'link' ? 'linked' : 'unlinked', `#${other.id}`);
       break;
+    }
+    case 'undo': { // take back your own last action (within 5 minutes)
+      const last = card.history.at(-1);
+      need(last && last.user === user && Date.now() - Date.parse(last.at) < 5 * 6e4, 409, 'Nothing to undo');
+      switch (last.action) {
+        case 'claimed':
+          card.assignees = card.assignees.filter((a) => a !== user);
+          if (!card.assignees.length && card.status === 'in_progress') card.status = 'open';
+          break;
+        case 'unclaimed': {
+          const who = last.text || user;
+          need(!card.assignees.length, 409, 'Someone else already took this card');
+          card.assignees.push(who); if (card.status === 'open') card.status = 'in_progress';
+          break;
+        }
+        case 'ready_to_test': card.status = 'in_progress'; break;
+        case 'complete': card.status = 'ready_to_test'; delete card.completed_by; break;
+        case 'test_failed':
+          card.status = 'ready_to_test';
+          if (card.comments.at(-1)?.text.startsWith('❌ Test failed')) card.comments.pop();
+          break;
+        default: throw new HttpError(409, 'This cannot be undone');
+      }
+      log(card, user, 'undone', last.action);
+      break;
+    }
+    case 'move': { // manual order inside a column: place between two neighbours
+      const epos = (c) => c.pos ?? Date.parse(c.created_at);
+      const above = body.after ? db.cards.find((c) => c.id === Number(body.after)) : null;
+      const below = body.before ? db.cards.find((c) => c.id === Number(body.before)) : null;
+      card.pos = above && below ? (epos(above) + epos(below)) / 2 : above ? epos(above) + 1000 : below ? epos(below) - 1000 : Date.now();
+      await save(); // no history entry / updated_at: re-ordering is not a content change
+      return sendJson(res, 200, card);
     }
     case 'ready': { // Dev/Claude: fix done, ready for tester
       forbid(me, 'dev', 'admin');
@@ -652,4 +736,5 @@ http.createServer(async (req, res) => {
 }).listen(PORT, () => {
   console.log(`GeckoBoard running at http://localhost:${PORT}`);
   recycle().catch((e) => console.error('recycle failed:', e.message));
+  purgeTrash().catch((e) => console.error('purgeTrash failed:', e.message));
 });
