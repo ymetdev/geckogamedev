@@ -57,6 +57,13 @@ main{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:14px;pad
 .title{margin:6px 0;font-weight:500}
 .meta{color:var(--mute);font-size:12px}
 .avatar{display:inline-block;background:var(--line);border-radius:10px;padding:0 8px;font-size:11px;color:var(--text)}
+.chk{display:flex;align-items:center;gap:6px;cursor:pointer;margin-right:2px}
+.chk input{appearance:none;width:16px;height:16px;border:1.5px solid #4a5264;border-radius:4px;margin:0;cursor:pointer;display:grid;place-content:center;background:var(--bg)}
+.chk input:checked{background:var(--accent);border-color:var(--accent)}
+.chk input:checked::after{content:"";width:8px;height:4px;border:2px solid #0b0d14;border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.chk input:disabled{opacity:.5;cursor:wait}
+.card.mine{border-color:#3b4270}
+.btn.danger{color:var(--bad);border-color:#4a2a2e}.btn.danger:hover{background:#2a1517}
 .empty{color:var(--mute);font-size:12px;text-align:center;padding:16px}
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:0;width:min(640px,94vw);max-height:90vh}
 dialog::backdrop{background:#000a}
@@ -155,7 +162,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>คลิกชื่อมุมขวาบน → <b>เชื่อมต่อ Claude (MCP)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/geckogamedev</code> เป็นที่อยู่จริง)</li>
       <li>Token เป็นของคุณคนเดียว ห้ามแชร์</li></ol>
       <b>ทุกครั้งที่ทำงาน</b><ol>
-      <li>เปิดการ์ด กด <b>✋ ฉันจะทำงานนี้</b> (การ์ดย้ายไปกำลังทำ) เลือกได้หลายใบ</li>
+      <li><b>ติ๊กช่องสี่เหลี่ยมที่การ์ดบนหน้าหลัก</b> เพื่อรับงาน (การ์ดย้ายไปกำลังทำ) เลือกได้หลายใบ ติ๊กออกเพื่อปล่อยการ์ด (หรือเปิดการ์ดแล้วกด <b>✋ ฉันจะทำงานนี้</b> ก็ได้)</li>
       <li>เปิด Claude Code <b>ในโฟลเดอร์โค้ดเกม</b> แล้วพิมพ์ เช่น
         <ul><li><code>ทำการ์ด GeckoBoard ที่ฉันรับไว้ทั้งหมด</code> (หลายใบ)</li><li><code>ทำการ์ด #12 ให้หน่อย</code> (ใบเดียว)</li></ul></li>
       <li>Claude จะอ่านการ์ด แก้โค้ด แล้วย้ายการ์ดไป <b>พร้อมเทส</b> พร้อมสรุปและวิธีเทสให้ Tester</li>
@@ -171,7 +178,8 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
     <details data-h="admin"><summary>Admin: จัดการทีม</summary><ol>
       <li>คลิกชื่อมุมขวาบน → <b>ทีมและสิทธิ์</b></li>
       <li>เพิ่มคนใหม่ด้วยอีเมล Google + เลือก role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
-      <li>คนที่ไม่อยู่ในรายชื่อจะ login ไม่ได้ เปลี่ยน role หรือลบคนออกได้ในหน้าเดียวกัน</li></ol></details>
+      <li>คนที่ไม่อยู่ในรายชื่อจะ login ไม่ได้ เปลี่ยน role หรือลบคนออกได้ในหน้าเดียวกัน</li>
+      <li>ลบการ์ด: เปิดการ์ด แล้วกด <b>🗑 ลบการ์ด</b> (เฉพาะ admin ลบแล้วกู้คืนไม่ได้)</li></ol></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
       <li><b>dev</b>: รับ/ปล่อยการ์ด ส่งพร้อมเทส (ผ่าน Claude)</li>
       <li><b>tester</b>: ผ่าน / ไม่ผ่าน / เปิดใหม่</li>
@@ -191,7 +199,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>Click your name (top right) → <b>Connect Claude (MCP)</b> and run the copied command in a terminal (replace <code>/path/to/geckogamedev</code> with the real path)</li>
       <li>The token is personal. Never share it</li></ol>
       <b>Every time you work</b><ol>
-      <li>Open a card and click <b>✋ I'll do this</b> (card moves to In Progress). You can take several</li>
+      <li><b>Tick the checkbox on a card on the main board</b> to claim it (it moves to In Progress). Take as many as you like; untick to release (or open the card and click <b>✋ I'll do this</b>)</li>
       <li>Open Claude Code <b>inside the game's code folder</b> and type, for example
         <ul><li><code>Do all the GeckoBoard cards I claimed</code> (multiple)</li><li><code>Do GeckoBoard card #12</code> (single)</li></ul></li>
       <li>Claude reads the card, fixes the code, then moves it to <b>Ready to Test</b> with a summary and test steps for the tester</li>
@@ -207,7 +215,8 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
     <details data-h="admin"><summary>Admin: manage the team</summary><ol>
       <li>Click your name (top right) → <b>Team &amp; roles</b></li>
       <li>Add people by Google email and choose a role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
-      <li>People not on the list can't sign in. Change roles or remove people on the same screen</li></ol></details>
+      <li>People not on the list can't sign in. Change roles or remove people on the same screen</li>
+      <li>Delete a card: open it and click <b>🗑 Delete</b> (admin only, cannot be undone)</li></ol></details>
     <details><summary>What can each role do?</summary><ul>
       <li><b>dev</b>: claim/release cards, send to Ready to Test (via Claude)</li>
       <li><b>tester</b>: Pass / Fail / Reopen</li>
@@ -232,7 +241,7 @@ en:{all:'All',tickets:'Tickets',tasks:'Tasks',everyone:'Everyone',mine:'Mine',un
  help_title:'How to use GeckoBoard',menu_token:'Connect Claude (MCP)',menu_team:'Team & roles',menu_out:'Sign out',
  claim:"✋ I'll do this",release:'Release',pass:'✓ Pass → Complete',fail:'✗ Fail → back to dev',reopen:'Reopen',
  by:'by',noassignee:'Unassigned',howtest:'🧪 How to test',comments:'Comments',nocomments:'No comments',writecomment:'Write a comment…',send:'Send',history:'History',
- failprompt:'Why did the test fail?',noGoogle:'Google sign-in is not configured on the server.',googleFail:'Could not load Google sign-in',
+ failprompt:'Why did the test fail?',tick_tip:'Tick = I will do this',delete:'Delete',confirm_delete:'Delete card #{0} "{1}"? This cannot be undone.',noGoogle:'Google sign-in is not configured on the server.',googleFail:'Could not load Google sign-in',
  a_created:'created',a_claimed:'claimed',a_unclaimed:'released',a_ready_to_test:'marked ready to test',a_complete:'passed (complete)',a_test_failed:'test failed',a_reopened:'reopened',a_commented:'commented',a_edited:'edited'},
 th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุกคน',mine:'ของฉัน',unassigned:'ยังไม่มีคนรับ',help:'? วิธีใช้',new:'+ สร้างการ์ด',
  s_open:'เปิด',s_in_progress:'กำลังทำ',s_ready_to_test:'พร้อมเทส',s_complete:'เสร็จสิ้น',
@@ -245,7 +254,7 @@ th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุ
  help_title:'วิธีใช้ GeckoBoard',menu_token:'เชื่อมต่อ Claude (MCP)',menu_team:'ทีมและสิทธิ์',menu_out:'ออกจากระบบ',
  claim:'✋ ฉันจะทำงานนี้',release:'ปล่อยการ์ด',pass:'✓ ผ่าน → เสร็จสิ้น',fail:'✗ ไม่ผ่าน → ส่งกลับให้ Dev',reopen:'เปิดใหม่',
  by:'โดย',noassignee:'ยังไม่มีคนรับ',howtest:'🧪 วิธีเทส',comments:'ความคิดเห็น',nocomments:'ยังไม่มีความคิดเห็น',writecomment:'เขียนความคิดเห็น…',send:'ส่ง',history:'ประวัติ',
- failprompt:'ทำไมเทสไม่ผ่าน?',noGoogle:'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google sign-in',googleFail:'โหลด Google sign-in ไม่สำเร็จ',
+ failprompt:'ทำไมเทสไม่ผ่าน?',tick_tip:'ติ๊ก = ฉันจะทำงานนี้',delete:'ลบการ์ด',confirm_delete:'ลบการ์ด #{0} "{1}" ใช่ไหม? ลบแล้วกู้คืนไม่ได้',noGoogle:'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google sign-in',googleFail:'โหลด Google sign-in ไม่สำเร็จ',
  a_created:'สร้างการ์ด',a_claimed:'รับงาน',a_unclaimed:'ปล่อยการ์ด',a_ready_to_test:'ส่งพร้อมเทส',a_complete:'เทสผ่าน (เสร็จสิ้น)',a_test_failed:'เทสไม่ผ่าน',a_reopened:'เปิดใหม่',a_commented:'คอมเมนต์',a_edited:'แก้ไข'}
 };
 let lang='en';
@@ -344,8 +353,11 @@ function render(){
   }).join('');
 }
 function cardHtml(c){
-  return `<div class="card" data-id="${c.id}">
-    <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
+  const canTick=role('dev','admin')&&c.status!=='complete'&&c.status!=='ready_to_test';
+  const mine=!!user&&c.assignees.includes(user.email);
+  const chk=canTick?`<label class="chk" title="${t('tick_tip')}"><input type="checkbox" data-claim="${c.id}" ${mine?'checked':''}></label>`:'';
+  return `<div class="card${mine?' mine':''}" data-id="${c.id}">
+    <div class="row">${chk}<span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
     <span class="meta pri-${c.priority}" style="margin-left:auto">${t('pri_'+c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>
     <div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}
@@ -361,6 +373,7 @@ function showCard(id,keep){
   }
   if(c.status==='ready_to_test'&&role('tester','admin')) acts.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
   if(c.status==='complete'&&role('tester','admin')) acts.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
+  if(role('admin')) acts.push(`<button class="btn danger" data-a="delete" style="margin-left:auto">🗑 ${t('delete')}</button>`);
   $('#viewBody').innerHTML=`
     <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id} · ${t('by')} ${esc(nameOf(c.reporter))} · <span class="pri-${c.priority}">${t('pri_'+c.priority)}</span></span>
       <span class="status" style="margin-left:auto;color:var(${COLOR[c.status]});border:1px solid var(${COLOR[c.status]})">${t('s_'+c.status)}</span></div>
@@ -381,6 +394,11 @@ function showCard(id,keep){
 }
 async function act(c,a){
   if(a==='close')return $('#viewDlg').close();
+  if(a==='delete'){
+    if(!confirm(t('confirm_delete',c.id,c.title)))return;
+    try{await api('DELETE','/cards/'+c.id);$('#viewDlg').close();await load()}catch(e){alert(e.message)}
+    return;
+  }
   try{
     let body={};
     if(a==='comment'){body.text=$('#cmt').value; if(!body.text.trim())return}
@@ -408,7 +426,15 @@ for(const [id,setter] of [['#typeSeg',v=>fType=v],['#whoSeg',v=>fWho=v]]){
   document.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{
     document.querySelectorAll(id+' button').forEach(x=>x.classList.remove('on'));b.classList.add('on');setter(b.dataset.v);render()});
 }
-$('#board').addEventListener('click',e=>{const el=e.target.closest('.card');if(el)showCard(+el.dataset.id)});
+$('#board').addEventListener('click',async e=>{
+  const box=e.target.closest('input[data-claim]');
+  if(box){ // tick = "I'll do this", untick = release; never opens the card
+    e.stopPropagation(); box.disabled=true;
+    try{await api('POST',`/cards/${box.dataset.claim}/${box.checked?'claim':'unclaim'}`,{})}catch(err){alert(err.message)}
+    await load(); return;
+  }
+  if(e.target.closest('.chk'))return;
+  const el=e.target.closest('.card');if(el)showCard(+el.dataset.id)});
 applyLang();
 api('GET','/me').then(setUser).catch(showLogin); setInterval(load,5000);
 </script>
