@@ -22,6 +22,15 @@ let db = { seq: 0, cards: [], users: [], sessions: {} };
 let writeChain = Promise.resolve();
 // Storage: Postgres when DATABASE_URL is set (Render/Neon), otherwise a local JSON file.
 const DATABASE_URL = process.env.DATABASE_URL || '';
+if (DATABASE_URL) { // fail early with a readable message (never prints the password)
+  let u;
+  try { u = new URL(DATABASE_URL); } catch { /* handled below */ }
+  if (!u || !/^postgres(ql)?:$/.test(u.protocol) || !u.hostname.includes('.')) {
+    console.error('DATABASE_URL is not a valid Postgres connection string. Paste only the value, e.g. postgresql://user:password@ep-xxxx.region.aws.neon.tech/dbname?sslmode=require (no quotes, no "psql", no "DATABASE_URL=" prefix).');
+    process.exit(1);
+  }
+  console.log(`Using Postgres at ${u.hostname}`);
+}
 const pool = DATABASE_URL
   ? new pg.Pool({ connectionString: DATABASE_URL, max: 3, ssl: /localhost|127\.0\.0\.1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false } })
   : null;
