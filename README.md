@@ -7,9 +7,11 @@ Kanban สำหรับทีมทำเกม: **Ticket + Task** → Dev ก
     GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com npm start   # http://localhost:3000  (env: PORT, DB_FILE)
 
 ## เชื่อม Claude (แต่ละ Dev ในเครื่องตัวเอง)
-    claude mcp add geckoboard \
-      -e GECKOBOARD_URL=http://<host>:3000 -e GECKOBOARD_TOKEN=<token ส่วนตัว> \
-      -- node /path/to/geckogamedev/mcp/server.js
+เมนูชื่อมุมขวาบน → **Connect Claude (MCP)** → คัดลอกคำสั่งไปรันใน terminal (ไม่ต้อง clone โปรเจกต์):
+
+    claude mcp add --scope user --transport http geckoboard https://<host>/mcp --header "Authorization: Bearer <token ส่วนตัว>"
+
+เซิร์ฟเวอร์เปิด MCP ผ่าน HTTP ที่ `/mcp` อยู่แล้ว (ทางเลือกเสริม: `mcp/server.js` แบบ stdio)
 
 จากนั้นใน Claude Code (เปิดใน repo เกม) พิมพ์ได้เลย เช่น
 - "ทำ card ที่ฉัน mark ไว้ทั้งหมด"  (multiple)

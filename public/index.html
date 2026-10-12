@@ -155,8 +155,9 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
 <dialog id="tokenDlg"><div class="dlg">
   <h3 data-i18n="token_title"></h3>
   <div class="meta" data-i18n="token_note"></div>
-  <div class="box" id="tokenCmd" style="user-select:all;font-family:monospace;font-size:12px"></div>
-  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#tokenDlg').close()" data-i18n="close"></button></div>
+  <div class="box" id="tokenCmd" style="user-select:all;font-family:monospace;font-size:12px;word-break:break-all"></div>
+  <div class="meta" data-i18n="token_after"></div>
+  <div class="actions"><button class="btn danger" id="rotateBtn" data-i18n="rotate"></button><span class="sp"></span><button class="btn" id="copyBtn" data-i18n="copy"></button><button class="btn" onclick="$('#tokenDlg').close()" data-i18n="close"></button></div>
 </div></dialog>
 
 <dialog id="helpDlg"><div class="dlg">
@@ -171,9 +172,9 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>ใช้ปุ่มกรอง <b>ของฉัน / ยังไม่มีคนรับ</b> เพื่อหางานของตัวเองหรืองานที่ยังไม่มีคนรับ</li></ol></details>
     <details data-h="dev"><summary>Dev: รับงานแล้วสั่ง Claude</summary>
       <b>ตั้งค่าครั้งแรก</b><ol>
-      <li>Clone โปรเจกต์ GeckoBoard (<code>github.com/ymetdev/geckogamedev</code>) แล้วรัน <code>npm install</code></li>
-      <li>คลิกชื่อมุมขวาบน → <b>เชื่อมต่อ Claude (MCP)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/geckogamedev</code> เป็นที่อยู่จริง)</li>
-      <li>Token เป็นของคุณคนเดียว ห้ามแชร์</li></ol>
+      <li>คลิกชื่อมุมขวาบน → <b>เชื่อมต่อ Claude (MCP)</b> กด <b>คัดลอก</b> แล้วเอาคำสั่งไปรันใน terminal ธรรมดา (ไม่ใช่ในแชตกับ Claude) ไม่ต้อง clone หรือติดตั้งอะไร</li>
+      <li>เปิด Claude Code ใหม่ แล้วพิมพ์ <code>/mcp</code> เช็กว่า geckoboard ขึ้น connected</li>
+      <li>Token เป็นของคุณคนเดียว ห้ามแชร์หรือวางในแชต ถ้าหลุดให้กด <b>สร้าง token ใหม่</b></li></ol>
       <b>ทุกครั้งที่ทำงาน</b><ol>
       <li><b>ติ๊กช่องสี่เหลี่ยมที่การ์ดบนหน้าหลัก</b> เพื่อรับงาน (การ์ดย้ายไปกำลังทำ) เลือกได้หลายใบ แต่ <b>การ์ด 1 ใบมีคนรับได้ 1 คน</b> ถ้ามีคนรับไปแล้วจะขึ้นรูปกุญแจและชื่อคนที่รับ ติ๊กออกเพื่อปล่อยการ์ด (หรือเปิดการ์ดแล้วกด <b>✋ ฉันจะทำงานนี้</b> ก็ได้)</li>
       <li>เปิด Claude Code <b>ในโฟลเดอร์โค้ดเกม</b> แล้วพิมพ์ เช่น
@@ -209,9 +210,9 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>Use the <b>Mine / Unassigned</b> filters to find your own cards or cards nobody has picked up</li></ol></details>
     <details data-h="dev"><summary>Dev: pick up work and ask Claude</summary>
       <b>First-time setup</b><ol>
-      <li>Clone the GeckoBoard project (<code>github.com/ymetdev/geckogamedev</code>) and run <code>npm install</code></li>
-      <li>Click your name (top right) → <b>Connect Claude (MCP)</b> and run the copied command in a terminal (replace <code>/path/to/geckogamedev</code> with the real path)</li>
-      <li>The token is personal. Never share it</li></ol>
+      <li>Click your name (top right) → <b>Connect Claude (MCP)</b>, press <b>Copy</b> and run the command in a normal terminal (not in a chat with Claude). No clone or install needed</li>
+      <li>Restart Claude Code and type <code>/mcp</code> to check geckoboard shows as connected</li>
+      <li>The token is personal. Never share it or paste it into a chat. If it leaks, click <b>Regenerate token</b></li></ol>
       <b>Every time you work</b><ol>
       <li><b>Tick the checkbox on a card on the main board</b> to claim it (it moves to In Progress). Take as many as you like, but <b>each card can have only one owner</b>: a card someone already took shows a lock and their name. Untick to release (or open the card and click <b>✋ I'll do this</b>)</li>
       <li>Open Claude Code <b>inside the game's code folder</b> and type, for example
@@ -252,7 +253,7 @@ en:{all:'All',tickets:'Tickets',tasks:'Tasks',everyone:'Everyone',mine:'Mine',un
  title:'Title',desc:'Description (steps to reproduce, expected result, etc.)',tags:'Tags (comma separated, e.g. UI, Combat, Audio)',
  cancel:'Cancel',create:'Create',signin_google:'Sign in with your Google account',dev_login:'Dev-only email login',continue:'Continue',
  team:'Team & roles',ph_email:'email',ph_name:'name',add:'Add',close:'Close',remove:'Remove',confirm_remove:'Remove {0}?',
- token_title:'Connect Claude (MCP)',token_note:'Run this in your terminal. The token is personal. Do not share it.',
+ token_title:'Connect Claude (MCP)',token_note:'Copy this command and run it in a terminal (no download needed). The token is personal. Do not share it or paste it into a chat.',token_after:'Then restart Claude Code and run /mcp to check that geckoboard is connected.',copy:'Copy',copied:'Copied ✓',rotate:'Regenerate token',confirm_rotate:'Generate a new token? The old one stops working and you must re-run the command.',
  help_title:'How to use GeckoBoard',menu_token:'Connect Claude (MCP)',menu_team:'Team & roles',menu_out:'Sign out',
  claim:"✋ I'll do this",release:'Release',pass:'✓ Pass → Complete',fail:'✗ Fail → back to dev',reopen:'Reopen',
  by:'by',noassignee:'Unassigned',howtest:'🧪 How to test',comments:'Comments',nocomments:'No comments',writecomment:'Write a comment…',send:'Send',history:'History',
@@ -265,7 +266,7 @@ th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุ
  title:'หัวข้อ',desc:'รายละเอียด (ขั้นตอนทำซ้ำ ผลที่คาดหวัง ฯลฯ)',tags:'Tag (คั่นด้วยจุลภาค เช่น UI, Combat, Audio)',
  cancel:'ยกเลิก',create:'สร้าง',signin_google:'ลงชื่อเข้าใช้ด้วยบัญชี Google',dev_login:'เข้าสู่ระบบด้วยอีเมล (สำหรับ dev เท่านั้น)',continue:'ดำเนินการต่อ',
  team:'ทีมและสิทธิ์',ph_email:'อีเมล',ph_name:'ชื่อ',add:'เพิ่ม',close:'ปิด',remove:'ลบ',confirm_remove:'ลบ {0} ออกจากทีม?',
- token_title:'เชื่อมต่อ Claude (MCP)',token_note:'รันคำสั่งนี้ใน terminal ของคุณ Token เป็นของคุณคนเดียว ห้ามแชร์',
+ token_title:'เชื่อมต่อ Claude (MCP)',token_note:'Copy คำสั่งนี้ไปรันใน terminal (ไม่ต้องดาวน์โหลดอะไรเพิ่ม) Token เป็นของคุณคนเดียว ห้ามแชร์หรือวางลงในแชต',token_after:'จากนั้นเปิด Claude Code ใหม่ แล้วพิมพ์ /mcp เพื่อเช็กว่า geckoboard เชื่อมต่อแล้ว',copy:'คัดลอก',copied:'คัดลอกแล้ว ✓',rotate:'สร้าง token ใหม่',confirm_rotate:'สร้าง token ใหม่? token เก่าจะใช้ไม่ได้ทันที และต้องรันคำสั่งใหม่',
  help_title:'วิธีใช้ GeckoBoard',menu_token:'เชื่อมต่อ Claude (MCP)',menu_team:'ทีมและสิทธิ์',menu_out:'ออกจากระบบ',
  claim:'✋ ฉันจะทำงานนี้',release:'ปล่อยการ์ด',pass:'✓ ผ่าน → เสร็จสิ้น',fail:'✗ ไม่ผ่าน → ส่งกลับให้ Dev',reopen:'เปิดใหม่',
  by:'โดย',noassignee:'ยังไม่มีคนรับ',howtest:'🧪 วิธีเทส',comments:'ความคิดเห็น',nocomments:'ยังไม่มีความคิดเห็น',writecomment:'เขียนความคิดเห็น…',send:'ส่ง',history:'ประวัติ',
@@ -328,9 +329,13 @@ document.addEventListener('click',()=>$('#menu')?.classList.remove('show'));
 async function menuAct(m){
   if(m==='out'){await api('POST','/logout',{});showLogin()}
   if(m==='token'){const me=await api('GET','/me');
-    $('#tokenCmd').textContent=`claude mcp add geckoboard -e GECKOBOARD_URL=${location.origin} -e GECKOBOARD_TOKEN=${me.token} -- node /path/to/geckogamedev/mcp/server.js`;$('#tokenDlg').showModal()}
+    showToken(me.token);$('#tokenDlg').showModal()}
   if(m==='team'){renderTeam();$('#teamDlg').showModal()}
 }
+const mcpCmd=tok=>`claude mcp add --scope user --transport http geckoboard ${location.origin}/mcp --header "Authorization: Bearer ${tok}"`;
+function showToken(tok){$('#tokenCmd').textContent=mcpCmd(tok)}
+$('#copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('#tokenCmd').textContent);$('#copyBtn').textContent=t('copied')}catch{const r=document.createRange();r.selectNodeContents($('#tokenCmd'));getSelection().removeAllRanges();getSelection().addRange(r)}setTimeout(()=>$('#copyBtn').textContent=t('copy'),1500)};
+$('#rotateBtn').onclick=async()=>{if(!confirm(t('confirm_rotate')))return;try{showToken((await api('POST','/me/rotate-token',{})).token)}catch(e){alert(e.message)}};
 function renderTeam(){
   $('#teamList').innerHTML=users.map(u=>`<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span>
     <select data-e="${esc(u.email)}">${['admin','dev','tester'].map(r=>`<option ${r===u.role?'selected':''}>${r}</option>`).join('')}</select>

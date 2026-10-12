@@ -1,6 +1,8 @@
 // GeckoBoard backend: zero-dependency HTTP server + JSON file store.
 import http from 'node:http';
 import pg from 'pg';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { createServer as createMcpServer } from './mcp/tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,6 +164,11 @@ async function api(req, res, url) {
   need(me, 401, 'Not logged in');
   const user = me.email; // identity always comes from auth, never from the request body
 
+  if (parts[0] === 'me' && parts[1] === 'rotate-token' && method === 'POST') {
+    me.token = crypto.randomBytes(24).toString('hex'); // old token stops working immediately
+    await save();
+    return sendJson(res, 200, { token: me.token });
+  }
   if (parts[0] === 'me' && method === 'GET') return sendJson(res, 200, { ...publicUser(me), token: me.token });
 
   // ---- users ----
@@ -333,10 +340,24 @@ function serveStatic(req, res, url) {
   });
 }
 
+// Remote MCP (Streamable HTTP, stateless). Auth: "Authorization: Bearer <personal token>".
+async function mcp(req, res) {
+  const token = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1] || '';
+  const u = token && db.users.find((x) => x.token === token);
+  if (!u) { res.setHeader('WWW-Authenticate', 'Bearer'); return sendJson(res, 401, { error: 'Missing or invalid token' }); }
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Use POST' });
+  const server = createMcpServer({ base: `http://127.0.0.1:${PORT}`, token });
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => { transport.close(); server.close(); });
+  await server.connect(transport);
+  await transport.handleRequest(req, res, await readBody(req));
+}
+
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
-    if (url.pathname.startsWith('/api/')) await api(req, res, url);
+    if (url.pathname === '/mcp') await mcp(req, res);
+    else if (url.pathname.startsWith('/api/')) await api(req, res, url);
     else serveStatic(req, res, url);
   } catch (e) {
     sendJson(res, e.code || 400, { error: e.message, ...e.extra });
