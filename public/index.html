@@ -34,6 +34,14 @@ h1{font-size:16px;margin:0 8px 0 0;letter-spacing:.3px}
 .menu button:hover{background:var(--line)}
 .trow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
 .trow .e{flex:1;overflow:hidden;text-overflow:ellipsis}
+.help{max-height:68vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
+.help details{border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--bg)}
+.help summary{cursor:pointer;font-weight:600}
+.help ol,.help ul{margin:8px 0 2px;padding-left:20px}.help li{margin:5px 0}
+.help code{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px}
+.flow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+.flow span{border:1px solid var(--line);border-radius:10px;padding:2px 10px}
+.help .note{color:var(--mute);font-size:12px}
 .err{color:var(--bad);font-size:12px;min-height:16px}
 main{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:14px;padding:18px 20px;align-items:start;overflow-x:auto}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:200px}
@@ -79,6 +87,7 @@ textarea{min-height:90px;resize:vertical}
     <button data-v="" class="on">Everyone</button><button data-v="mine">Mine</button><button data-v="unassigned">Unassigned</button>
   </div>
   <span class="sp"></span>
+  <button class="btn" id="helpBtn">? วิธีใช้</button>
   <button class="btn primary" id="newBtn">+ New</button>
   <div id="userBox" class="userbox"></div>
 </header>
@@ -127,6 +136,46 @@ textarea{min-height:90px;resize:vertical}
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#tokenDlg').close()">Close</button></div>
 </div></dialog>
 
+<dialog id="helpDlg"><div class="dlg">
+  <h3>วิธีใช้ DevBoard</h3>
+  <div class="flow"><span>Open</span>→<span style="color:var(--prog)">In Progress</span>→<span style="color:var(--test)">Ready to Test</span>→<span style="color:var(--done)">Complete</span></div>
+  <div class="help">
+    <details open id="h-all"><summary>ทุกคน: สร้างการ์ด</summary><ol>
+      <li>กด <b>+ New</b> เลือก <b>Ticket</b> (บั๊ก/คำขอ) หรือ <b>Task</b> (งานที่ต้องทำ)</li>
+      <li>ใส่ชื่อ รายละเอียด (ขั้นตอนทำซ้ำ ผลที่คาดหวัง) ความสำคัญ และ tag ยิ่งละเอียด Claude ยิ่งแก้ตรงจุด</li>
+      <li>ใช้ปุ่มกรอง <b>Mine / Unassigned</b> เพื่อหางานของตัวเองหรืองานที่ยังไม่มีคนรับ</li></ol></details>
+    <details id="h-dev"><summary>Dev: รับงานแล้วสั่ง Claude</summary>
+      <b>ตั้งค่าครั้งแรก</b><ol>
+      <li>Clone โปรเจกต์ DevBoard (<code>github.com/ymetdev/geckogamedev</code>) แล้วรัน <code>npm install</code></li>
+      <li>คลิกชื่อมุมขวาบน → <b>Connect Claude (MCP token)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/devboard</code> เป็นที่อยู่จริง)</li>
+      <li>Token เป็นของคุณคนเดียว ห้ามแชร์</li></ol>
+      <b>ทุกครั้งที่ทำงาน</b><ol>
+      <li>เปิดการ์ด กด <b>✋ I'll do this</b> (การ์ดย้ายไป In Progress) เลือกได้หลายใบ</li>
+      <li>เปิด Claude Code <b>ในโฟลเดอร์โค้ดเกม</b> แล้วพิมพ์ เช่น
+        <ul><li><code>ทำ card ที่ฉัน mark ไว้ทั้งหมด</code> (หลายใบ)</li><li><code>ทำ #12 ให้หน่อย</code> (ใบเดียว)</li></ul></li>
+      <li>Claude จะอ่านการ์ด แก้โค้ด แล้วย้ายการ์ดไป <b>Ready to Test</b> พร้อมสรุปและวิธีเทสให้ Tester</li>
+      <li>ตรวจโค้ดที่ Claude แก้ก่อน commit (Claude ไม่ commit/push เองถ้าไม่สั่ง)</li>
+      <li>ถ้า Tester ตีกลับ ให้สั่งใหม่ เช่น <code>ทำ #12 ใหม่ ดูคอมเมนต์ที่ tester ทิ้งไว้</code></li></ol>
+      <div class="note">ติดงานไม่ไหว? กด <b>Release</b> เพื่อปล่อยการ์ดให้คนอื่นรับ</div></details>
+    <details id="h-tester"><summary>Tester: เทสและปิดงาน</summary><ol>
+      <li>ดูคอลัมน์ <b>Ready to Test</b> แล้วเปิดการ์ด</li>
+      <li>อ่านหัวข้อ <b>🧪 How to test</b> ทำตามขั้นตอนทีละข้อ</li>
+      <li>ผ่านหมด → กด <b>✓ Pass</b> การ์ดไป Complete</li>
+      <li>ไม่ผ่าน → กด <b>✗ Fail</b> พร้อมเหตุผล การ์ดกลับไป In Progress และเหตุผลจะถูกบันทึกเป็นคอมเมนต์</li>
+      <li>ถ้างานที่ปิดไปแล้วมีปัญหากลับมา กด <b>Reopen</b></li></ol></details>
+    <details id="h-admin"><summary>Admin: จัดการทีม</summary><ol>
+      <li>คลิกชื่อมุมขวาบน → <b>Team &amp; roles</b></li>
+      <li>เพิ่มคนใหม่ด้วยอีเมล Google + เลือก role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
+      <li>คนที่ไม่อยู่ในรายชื่อจะ login ไม่ได้ เปลี่ยน role หรือลบคนออกได้ในหน้าเดียวกัน</li></ol></details>
+    <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
+      <li><b>dev</b>: รับ/ปล่อยการ์ด ส่ง Ready to Test (ผ่าน Claude)</li>
+      <li><b>tester</b>: Pass / Fail / Reopen</li>
+      <li><b>admin</b>: ทำได้ทุกอย่าง + จัดการทีม + ลบการ์ด</li>
+      <li>ทุก role สร้างการ์ดและคอมเมนต์ได้</li></ul></details>
+  </div>
+  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#helpDlg').close()">ปิด</button></div>
+</div></dialog>
+
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
 
 <script>
@@ -147,7 +196,7 @@ async function load(){ if(!user)return; try{[cards,users]=await Promise.all([api
 
 function showLogin(){ user=null; $('#userBox').innerHTML=''; if(!$('#loginDlg').open)$('#loginDlg').showModal(); initLogin() }
 function setUser(u){
-  user=u; $('#loginDlg').close();
+  user=u; $('#loginDlg').close(); if(window.__showHelp){window.__showHelp=false;$('#helpBtn').click()}
   $('#userBox').innerHTML=`<div class="chip" id="chip"><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
    <div class="menu" id="menu">
      <button data-m="token">Connect Claude (MCP token)</button>
@@ -253,6 +302,12 @@ async function act(c,a){
 }
 $('#viewDlg').addEventListener('close',()=>openId=null);
 
+$('#helpBtn').onclick=()=>{
+  const mine={dev:'h-dev',tester:'h-tester',admin:'h-admin'}[user?.role];
+  document.querySelectorAll('#helpDlg details').forEach(d=>d.open=(d.id==='h-all'||d.id===mine));
+  $('#helpDlg').showModal();
+};
+try{ if(!localStorage.getItem('devboard.helpSeen')){ localStorage.setItem('devboard.helpSeen','1'); window.__showHelp=true } }catch{}
 $('#newBtn').onclick=()=>$('#newDlg').showModal();
 $('#newForm').addEventListener('submit',async e=>{
   if(e.submitter?.value!=='ok'){return}
