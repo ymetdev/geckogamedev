@@ -157,6 +157,10 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
   <div class="meta" data-i18n="token_note"></div>
   <div class="box" id="tokenCmd" style="user-select:all;font-family:monospace;font-size:12px;word-break:break-all"></div>
   <div class="meta" data-i18n="token_after"></div>
+  <details class="sec" style="margin-top:4px"><summary class="meta" data-i18n="no_cli" style="cursor:pointer"></summary>
+    <div class="meta" data-i18n="no_cli_note" style="margin:8px 0"></div>
+    <div class="box" id="tokenJson" style="user-select:all;font-family:monospace;font-size:12px;word-break:break-all"></div>
+    <div class="actions" style="margin-top:8px"><span class="sp"></span><button class="btn" id="copyJsonBtn" data-i18n="copy"></button></div></details>
   <div class="actions"><button class="btn danger" id="rotateBtn" data-i18n="rotate"></button><span class="sp"></span><button class="btn" id="copyBtn" data-i18n="copy"></button><button class="btn" onclick="$('#tokenDlg').close()" data-i18n="close"></button></div>
 </div></dialog>
 
@@ -173,6 +177,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
     <details data-h="dev"><summary>Dev: รับงานแล้วสั่ง Claude</summary>
       <b>ตั้งค่าครั้งแรก</b><ol>
       <li>คลิกชื่อมุมขวาบน → <b>เชื่อมต่อ Claude (MCP)</b> กด <b>คัดลอก</b> แล้วเอาคำสั่งไปรันใน terminal ธรรมดา (ไม่ใช่ในแชตกับ Claude) ไม่ต้อง clone หรือติดตั้งอะไร</li>
+      <li>ถ้าไม่มีคำสั่ง <code>claude</code> ในเครื่อง ให้เปิดหัวข้อ <b>ไม่มีคำสั่ง claude</b> ในหน้าเดียวกัน แล้วเอา JSON ไปใส่ในไฟล์ <code>~/.claude.json</code></li>
       <li>เปิด Claude Code ใหม่ แล้วพิมพ์ <code>/mcp</code> เช็กว่า geckoboard ขึ้น connected</li>
       <li>Token เป็นของคุณคนเดียว ห้ามแชร์หรือวางในแชต ถ้าหลุดให้กด <b>สร้าง token ใหม่</b></li></ol>
       <b>ทุกครั้งที่ทำงาน</b><ol>
@@ -211,6 +216,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
     <details data-h="dev"><summary>Dev: pick up work and ask Claude</summary>
       <b>First-time setup</b><ol>
       <li>Click your name (top right) → <b>Connect Claude (MCP)</b>, press <b>Copy</b> and run the command in a normal terminal (not in a chat with Claude). No clone or install needed</li>
+      <li>No <code>claude</code> command on your machine? Open <b>No `claude` command</b> in the same dialog and paste the JSON into <code>~/.claude.json</code></li>
       <li>Restart Claude Code and type <code>/mcp</code> to check geckoboard shows as connected</li>
       <li>The token is personal. Never share it or paste it into a chat. If it leaks, click <b>Regenerate token</b></li></ol>
       <b>Every time you work</b><ol>
@@ -253,7 +259,7 @@ en:{all:'All',tickets:'Tickets',tasks:'Tasks',everyone:'Everyone',mine:'Mine',un
  title:'Title',desc:'Description (steps to reproduce, expected result, etc.)',tags:'Tags (comma separated, e.g. UI, Combat, Audio)',
  cancel:'Cancel',create:'Create',signin_google:'Sign in with your Google account',dev_login:'Dev-only email login',continue:'Continue',
  team:'Team & roles',ph_email:'email',ph_name:'name',add:'Add',close:'Close',remove:'Remove',confirm_remove:'Remove {0}?',
- token_title:'Connect Claude (MCP)',token_note:'Copy this command and run it in a terminal (no download needed). The token is personal. Do not share it or paste it into a chat.',token_after:'Then restart Claude Code and run /mcp to check that geckoboard is connected.',copy:'Copy',copied:'Copied ✓',rotate:'Regenerate token',confirm_rotate:'Generate a new token? The old one stops working and you must re-run the command.',
+ token_title:'Connect Claude (MCP)',token_note:'Copy this command and run it in a terminal (no download needed). The token is personal. Do not share it or paste it into a chat.',token_after:'Then restart Claude Code and run /mcp to check that geckoboard is connected.',copy:'Copy',copied:'Copied ✓',no_cli:'No `claude` command / using the desktop app?',no_cli_note:'Add this block to the top-level "mcpServers" of ~/.claude.json (C:\\Users\\<you>\\.claude.json on Windows), then restart Claude Code. Or install the CLI: npm i -g @anthropic-ai/claude-code',rotate:'Regenerate token',confirm_rotate:'Generate a new token? The old one stops working and you must re-run the command.',
  help_title:'How to use GeckoBoard',menu_token:'Connect Claude (MCP)',menu_team:'Team & roles',menu_out:'Sign out',
  claim:"✋ I'll do this",release:'Release',pass:'✓ Pass → Complete',fail:'✗ Fail → back to dev',reopen:'Reopen',
  by:'by',noassignee:'Unassigned',howtest:'🧪 How to test',comments:'Comments',nocomments:'No comments',writecomment:'Write a comment…',send:'Send',history:'History',
@@ -266,7 +272,7 @@ th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุ
  title:'หัวข้อ',desc:'รายละเอียด (ขั้นตอนทำซ้ำ ผลที่คาดหวัง ฯลฯ)',tags:'Tag (คั่นด้วยจุลภาค เช่น UI, Combat, Audio)',
  cancel:'ยกเลิก',create:'สร้าง',signin_google:'ลงชื่อเข้าใช้ด้วยบัญชี Google',dev_login:'เข้าสู่ระบบด้วยอีเมล (สำหรับ dev เท่านั้น)',continue:'ดำเนินการต่อ',
  team:'ทีมและสิทธิ์',ph_email:'อีเมล',ph_name:'ชื่อ',add:'เพิ่ม',close:'ปิด',remove:'ลบ',confirm_remove:'ลบ {0} ออกจากทีม?',
- token_title:'เชื่อมต่อ Claude (MCP)',token_note:'Copy คำสั่งนี้ไปรันใน terminal (ไม่ต้องดาวน์โหลดอะไรเพิ่ม) Token เป็นของคุณคนเดียว ห้ามแชร์หรือวางลงในแชต',token_after:'จากนั้นเปิด Claude Code ใหม่ แล้วพิมพ์ /mcp เพื่อเช็กว่า geckoboard เชื่อมต่อแล้ว',copy:'คัดลอก',copied:'คัดลอกแล้ว ✓',rotate:'สร้าง token ใหม่',confirm_rotate:'สร้าง token ใหม่? token เก่าจะใช้ไม่ได้ทันที และต้องรันคำสั่งใหม่',
+ token_title:'เชื่อมต่อ Claude (MCP)',token_note:'Copy คำสั่งนี้ไปรันใน terminal (ไม่ต้องดาวน์โหลดอะไรเพิ่ม) Token เป็นของคุณคนเดียว ห้ามแชร์หรือวางลงในแชต',token_after:'จากนั้นเปิด Claude Code ใหม่ แล้วพิมพ์ /mcp เพื่อเช็กว่า geckoboard เชื่อมต่อแล้ว',copy:'คัดลอก',copied:'คัดลอกแล้ว ✓',no_cli:'ไม่มีคำสั่ง claude / ใช้แอป Desktop?',no_cli_note:'เพิ่มบล็อกนี้ใน "mcpServers" ระดับบนสุดของไฟล์ ~/.claude.json (Windows: C:\\Users\\<ชื่อคุณ>\\.claude.json) แล้วเปิด Claude Code ใหม่ หรือติดตั้ง CLI: npm i -g @anthropic-ai/claude-code',rotate:'สร้าง token ใหม่',confirm_rotate:'สร้าง token ใหม่? token เก่าจะใช้ไม่ได้ทันที และต้องรันคำสั่งใหม่',
  help_title:'วิธีใช้ GeckoBoard',menu_token:'เชื่อมต่อ Claude (MCP)',menu_team:'ทีมและสิทธิ์',menu_out:'ออกจากระบบ',
  claim:'✋ ฉันจะทำงานนี้',release:'ปล่อยการ์ด',pass:'✓ ผ่าน → เสร็จสิ้น',fail:'✗ ไม่ผ่าน → ส่งกลับให้ Dev',reopen:'เปิดใหม่',
  by:'โดย',noassignee:'ยังไม่มีคนรับ',howtest:'🧪 วิธีเทส',comments:'ความคิดเห็น',nocomments:'ยังไม่มีความคิดเห็น',writecomment:'เขียนความคิดเห็น…',send:'ส่ง',history:'ประวัติ',
@@ -333,7 +339,11 @@ async function menuAct(m){
   if(m==='team'){renderTeam();$('#teamDlg').showModal()}
 }
 const mcpCmd=tok=>`claude mcp add --scope user --transport http geckoboard ${location.origin}/mcp --header "Authorization: Bearer ${tok}"`;
-function showToken(tok){$('#tokenCmd').textContent=mcpCmd(tok)}
+function showToken(tok){
+  $('#tokenCmd').textContent=mcpCmd(tok);
+  $('#tokenJson').textContent=JSON.stringify({mcpServers:{geckoboard:{type:'http',url:location.origin+'/mcp',headers:{Authorization:'Bearer '+tok}}}},null,2);
+}
+$('#copyJsonBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('#tokenJson').textContent);$('#copyJsonBtn').textContent=t('copied')}catch{}setTimeout(()=>$('#copyJsonBtn').textContent=t('copy'),1500)};
 $('#copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('#tokenCmd').textContent);$('#copyBtn').textContent=t('copied')}catch{const r=document.createRange();r.selectNodeContents($('#tokenCmd'));getSelection().removeAllRanges();getSelection().addRange(r)}setTimeout(()=>$('#copyBtn').textContent=t('copy'),1500)};
 $('#rotateBtn').onclick=async()=>{if(!confirm(t('confirm_rotate')))return;try{showToken((await api('POST','/me/rotate-token',{})).token)}catch(e){alert(e.message)}};
 function renderTeam(){
