@@ -276,8 +276,8 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
     <details data-h="tester"><summary>Tester: เทสและปิดงาน</summary><ol>
       <li>ดูคอลัมน์ <b>พร้อมเทส</b> แล้วเปิดการ์ด</li>
       <li>อ่านหัวข้อ <b>🧪 วิธีเทส</b> ทำตามขั้นตอนทีละข้อ</li>
-      <li>ติ๊กขั้นตอนเทส<b>ทีละข้อ</b> เมื่อติ๊กครบแล้วกด <b>✓ ผ่าน → เสร็จสิ้น</b> (ถ้าติ๊กไม่ครบจะกดผ่านไม่ได้)</li>
-      <li>ไม่ผ่าน → กด <b>✗ ไม่ผ่าน</b> พร้อมเหตุผล การ์ดกลับไปกำลังทำ และเหตุผลจะถูกบันทึกเป็นคอมเมนต์</li>
+      <li>เทสตามขั้นตอนที่เขียนไว้ ถ้าไม่เจอปัญหา กด <b>✓ ผ่าน → เสร็จสิ้น</b> ปุ่มเดียวจบ</li>
+      <li>ถ้าติดตรงไหน กด <b>✗ ไม่ผ่าน</b> แล้วพิมพ์ว่าเจออะไร (วางรูปแคปหน้าจอด้วย Ctrl+V ได้) การ์ดจะกลับไปกำลังทำ และข้อความจะถูกบันทึกเป็นคอมเมนต์ให้ Dev เห็น</li>
       <li>ถ้างานที่ปิดไปแล้วมีปัญหากลับมา กด <b>เปิดใหม่</b></li></ol></details>
     <details data-h="admin"><summary>Admin: จัดการทีม</summary><ol>
       <li>คลิกชื่อมุมขวาบน → <b>ทีมและสิทธิ์</b></li>
@@ -326,8 +326,8 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
     <details data-h="tester"><summary>Tester: test and close</summary><ol>
       <li>Look at the <b>Ready to Test</b> column and open a card</li>
       <li>Read <b>🧪 How to test</b> and follow the steps one by one</li>
-      <li>Tick each test step <b>one by one</b>; once all are ticked, click <b>✓ Pass → Complete</b> (Pass is blocked until every step is ticked)</li>
-      <li>Not working → click <b>✗ Fail</b> with a reason. The card goes back to In Progress and the reason is saved as a comment</li>
+      <li>Follow the test steps. If nothing is wrong, click <b>✓ Pass → Complete</b>. One click, done</li>
+      <li>If you get stuck anywhere, click <b>✗ Fail</b> and type what you saw (you can paste a screenshot with Ctrl+V). The card goes back to In Progress and your note is saved as a comment for the dev</li>
       <li>If a closed card turns out to be broken, click <b>Reopen</b></li></ol></details>
     <details data-h="admin"><summary>Admin: manage the team</summary><ol>
       <li>Click your name (top right) → <b>Team &amp; roles</b></li>
@@ -353,6 +353,14 @@ table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-sp
   </div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#helpDlg').close()" data-i18n="close"></button></div>
 </div></dialog>
+
+<dialog id="failDlg"><form class="dlg" id="failForm">
+  <h3 data-i18n="fail_title"></h3>
+  <label><span data-i18n="fail_label"></span><textarea name="text" required style="min-height:130px" data-i18n-ph="fail_ph"></textarea></label>
+  <div class="meta" data-i18n="fail_hint"></div>
+  <div class="err" id="failErr"></div>
+  <div class="actions"><span class="sp"></span><button type="button" class="btn" id="failCancel" data-i18n="cancel"></button><button class="btn bad" data-i18n="fail_send"></button></div>
+</form></dialog>
 
 <dialog id="readyDlg"><form class="dlg" id="readyForm">
   <h3 data-i18n="ready_title"></h3>

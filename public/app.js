@@ -262,7 +262,7 @@ function cardHtml(c) {
   const chips = [dueChip(c), c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : '',
     c.parent ? `<span class="pill">↳ #${c.parent}</span>` : '', cards.some((x) => x.parent === c.id) ? `<span class="pill">⑂ ${cards.filter((x) => x.parent === c.id).length}</span>` : '',
     c.files.length ? `<span class="pill">📎 ${c.files.length}</span>` : '',
-    c.status === 'ready_to_test' && c.test_steps.length ? `<span class="pill prog">✔ ${c.test_checks.filter(Boolean).length}/${c.test_steps.length}</span>` : ''].filter(Boolean).join('');
+].filter(Boolean).join('');
   return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}" data-id="${c.id}" draggable="true">
     <div class="row">${ctl}<span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
     <span class="meta pri-${c.priority}" style="margin-left:auto">${t('pri_' + c.priority)}</span></div>
@@ -318,10 +318,9 @@ async function moveCard(c, to) {
     if (from === 'open' && to === 'in_progress' && role('dev', 'admin')) await api('POST', `/cards/${c.id}/claim`, {});
     else if (from === 'in_progress' && to === 'open' && (mine || role('admin'))) await api('POST', `/cards/${c.id}/unclaim`, mine ? {} : { email: c.assignees[0] });
     else if (from === 'ready_to_test' && to === 'complete' && role('tester', 'admin')) {
-      if (!(c.test_checks.length === c.test_steps.length && c.test_checks.every(Boolean))) { toast(t('must_tick')); return showCard(c.id); }
       await api('POST', `/cards/${c.id}/pass`, {});
     } else if (from === 'ready_to_test' && to === 'in_progress' && role('tester', 'admin')) {
-      const text = prompt(t('failprompt')); if (!text) return; await api('POST', `/cards/${c.id}/fail`, { text });
+      return openFailDlg(c);
     } else if (from === 'complete' && (to === 'open' || to === 'in_progress') && role('tester', 'admin')) await api('POST', `/cards/${c.id}/reopen`, {});
     else if (from === 'in_progress' && to === 'ready_to_test' && role('dev', 'admin')) { if (mine || role('admin')) return openReadyDlg(c); return toast(t('move_not_yours')); }
     else if (to === 'ready_to_test') return toast(t('move_no'));
@@ -340,7 +339,7 @@ function mdText(c) {
   if (c.assignees.length) L.push(`${t('working')}: ${c.assignees.map(nameOf).join(', ')}`);
   if (c.due) L.push(t('due_on', c.due)); if (c.milestone) L.push(t('ms_chip', c.milestone));
   if (c.description) L.push('', c.description);
-  if (c.test_steps.length) L.push('', t('howtest'), ...c.test_steps.map((s, i) => `${c.test_checks[i] ? '[x]' : '[ ]'} ${i + 1}. ${s}`));
+  if (c.test_steps.length) L.push('', t('howtest'), ...c.test_steps.map((s, i) => `${i + 1}. ${s}`));
   if (location.origin) L.push('', `${location.origin}/#card-${c.id}`);
   return L.join('\n');
 }
@@ -357,14 +356,12 @@ function showCard(id, keep) {
     else if (!owner) acts.push(`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
     else if (role('admin')) acts.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other', nameOf(owner))}</button>`);
   }
-  const allTicked = c.test_steps.length && c.test_checks.length === c.test_steps.length && c.test_checks.every(Boolean);
-  if (c.status === 'ready_to_test' && role('tester', 'admin')) acts.push(`<button class="btn ok" data-a="pass" ${allTicked ? '' : 'disabled style="opacity:.5" title="' + esc(t('must_tick')) + '"'}>${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
+  if (c.status === 'ready_to_test' && role('tester', 'admin')) acts.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
   if (c.status === 'complete' && role('tester', 'admin')) acts.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
   if (role('dev', 'admin') && (mine || role('admin')) && (c.status === 'in_progress' || c.status === 'ready_to_test')) {
     acts.unshift(`<button class="btn ${c.status === 'in_progress' ? 'primary' : ''}" data-a="ready">${t(c.status === 'in_progress' ? 'send_test' : 'edit_steps')}</button>`);
   }
   if (role('dev', 'admin')) acts.push(`<button class="btn danger" data-a="delete" style="margin-left:auto">🗑 ${t('delete')}</button>`);
-  const canTick = c.status === 'ready_to_test' && role('tester', 'admin');
   const files = c.files.map((f) => {
     const vid = f.mime.startsWith('video/');
     const thumbSrc = f.thumb ? `/api/files/${f.id}?thumb=1` : (!f.purged && !vid ? `/api/files/${f.id}` : '');
@@ -390,10 +387,9 @@ function showCard(id, keep) {
       ${files ? `<div class="gal">${files}</div>` : ''}
       <div class="drop" id="drop">${t('drop_hint')} · <a href="#" id="pickFile" style="color:var(--accent)">${t('add_file')}</a>
         <input type="file" id="fileIn" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm"></div></div>
-    ${c.test_steps.length ? `<div class="sec"><h4>${t('howtest')} · <span class="pill prog">${t('steps_done', c.test_checks.filter(Boolean).length, c.test_steps.length)}</span></h4>
+    ${c.test_steps.length ? `<div class="sec"><h4>${t('howtest')}</h4>
       ${c.dev_summary ? `<div class="box testbox" style="margin-bottom:8px">${esc(c.dev_summary)}</div>` : ''}
-      ${c.test_steps.map((s, i) => `<label class="ck${c.test_checks[i] ? ' done' : ''}" style="color:var(--text);font-size:14px"><input type="checkbox" data-step="${i}" ${c.test_checks[i] ? 'checked' : ''} ${canTick ? '' : 'disabled'}><span>${esc(s)}</span></label>`).join('')}
-      ${canTick ? `<div class="meta">${t('tester_ticks')}</div>` : ''}</div>` : ''}
+      <ol class="steps" style="font-size:14px">${c.test_steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>` : ''}
     <div class="actions">${acts.join('')}</div>
     <div class="sec"><h4>${t('links')}</h4>
       ${c.parent ? `<div class="meta">${t('parent_of')}</div>${linkRow(c.parent, canEdit, 'parent')}` : ''}
@@ -419,7 +415,6 @@ function wireDetail(c) {
   $$('#viewBody [data-unlink]').forEach((b) => (b.onclick = async () => {
     try { if (b.dataset.kind === 'parent') await api('PATCH', `/cards/${c.id}`, { parent: null }); else await api('POST', `/cards/${c.id}/unlink`, { id: +b.dataset.unlink }); await load(); } catch (e) { toast(e.message); }
   }));
-  $$('#viewBody [data-step]').forEach((i) => (i.onchange = async () => { try { await api('POST', `/cards/${c.id}/check`, { index: +i.dataset.step, checked: i.checked }); await load(); } catch (e) { toast(e.message); await load(); } }));
   $$('#viewBody [data-lb]').forEach((img) => (img.onclick = () => { $('#lbImg').src = `/api/files/${img.dataset.lb}`; $('#lbDlg').showModal(); }));
   $$('#viewBody [data-gone]').forEach((el) => (el.onclick = () => toast(t('recycled_note'))));
   $$('#viewBody [data-pin]').forEach((b) => (b.onclick = async () => { try { await api('PATCH', `/cards/${c.id}/files/${b.dataset.pin}`, { pinned: b.dataset.on !== '1' }); await load(); } catch (e) { toast(e.message); } }));
@@ -448,10 +443,19 @@ function wireDetail(c) {
 document.addEventListener('paste', (e) => {
   const files = imagesFrom(e.clipboardData).map(named);
   if (!files.length || !user) return;
+  if ($('#failDlg').open && failFor) { e.preventDefault(); toast(t('uploading')); attach(failFor.id, files).then(load); return; } // screenshot of the problem
   if ($('#cardDlg').open) { e.preventDefault(); if (editId) { toast(t('uploading')); attach(editId, files).then(load); } else addPending(files); return; }
   if ($('#viewDlg').open && openId) { e.preventDefault(); toast(t('uploading')); attach(openId, files).then(load); return; }
   if ($$('dialog[open]').length) return; // some other dialog (login, team...) is open
   e.preventDefault(); openCardDlg(null); addPending(files); // pasted on the board: new card with the image(s)
+});
+let failFor = null;
+function openFailDlg(c) { failFor = c; const f = $('#failForm'); f.reset(); $('#failErr').textContent = ''; $('#failDlg').showModal(); f.text.focus(); }
+$('#failCancel').onclick = () => $('#failDlg').close();
+$('#failForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const text = e.target.text.value.trim();
+  if (!text) { $('#failErr').textContent = t('fail_need'); return; }
+  try { await api('POST', `/cards/${failFor.id}/fail`, { text }); $('#failDlg').close(); $('#viewDlg').close(); await load(); } catch (err) { $('#failErr').textContent = err.message; }
 });
 let readyFor = null;
 function openReadyDlg(c) {
@@ -485,7 +489,7 @@ async function act(c, a, btn) {
     }
     const body = {};
     if (a === 'comment') { body.text = $('#cmt').value; if (!body.text.trim()) return; }
-    if (a === 'fail') { body.text = prompt(t('failprompt')); if (!body.text) return; }
+    if (a === 'fail') return openFailDlg(c);
     try { await api('POST', `/cards/${c.id}/${a}`, body); }
     catch (er) { await load(); if (er.data?.claimed_by) { toast(t('already', nameOf(er.data.claimed_by))); return; } throw er; }
     await load();

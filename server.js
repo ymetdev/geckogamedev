@@ -69,7 +69,7 @@ async function putBlobEarly(hash, mime, buf) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true }); fs.writeFileSync(path.join(UPLOAD_DIR, hash), buf);
 }
 for (const c of db.cards) { // upgrade older cards with the newer fields
-  c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; c.test_checks ??= (c.test_steps || []).map(() => false);
+  c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= [];
 }
 // Seed team from data/users.seed.json (adds missing emails only; later role changes in the UI are kept)
 try {
@@ -435,7 +435,7 @@ async function api(req, res, url) {
       id: ++db.seq, type, title, description: clean(body.description), priority, tags,
       due, milestone: clean(body.milestone, 40), parent: parentId, related: [], files: [],
       reporter: user, status: 'open', assignees: [],
-      dev_summary: '', test_steps: [], test_checks: [], comments: [], history: [],
+      dev_summary: '', test_steps: [], comments: [], history: [],
       created_at: now(), updated_at: now(),
     };
     log(card, user, 'created');
@@ -560,15 +560,6 @@ async function api(req, res, url) {
       log(card, user, action === 'link' ? 'linked' : 'unlinked', `#${other.id}`);
       break;
     }
-    case 'check': { // tester ticks one test step
-      forbid(me, 'tester', 'admin');
-      need(card.status === 'ready_to_test', 409, 'Card is not ready to test');
-      const i = Number(body.index);
-      need(Number.isInteger(i) && i >= 0 && i < card.test_steps.length, 400, 'Bad step');
-      card.test_checks[i] = !!body.checked;
-      card.updated_at = now();
-      break;
-    }
     case 'ready': { // Dev/Claude: fix done, ready for tester
       forbid(me, 'dev', 'admin');
       need(card.assignees.includes(user) || can(me, 'admin'), 403, 'Only an assignee can mark this ready');
@@ -577,7 +568,6 @@ async function api(req, res, url) {
       need(steps.length > 0, 400, 'test_steps required (at least one step)');
       card.dev_summary = clean(body.summary);
       card.test_steps = steps;
-      card.test_checks = steps.map(() => false);
       card.status = 'ready_to_test';
       log(card, user, 'ready_to_test', card.dev_summary);
       notify('ready_to_test', card, user, card.dev_summary);
@@ -586,7 +576,6 @@ async function api(req, res, url) {
     case 'pass': { // Tester: passed -> complete
       forbid(me, 'tester', 'admin');
       need(card.status === 'ready_to_test', 409, 'Card is not ready to test');
-      need(card.test_checks.length === card.test_steps.length && card.test_checks.every(Boolean), 409, 'Tick every test step before passing');
       card.status = 'complete';
       card.completed_by = user;
       log(card, user, 'complete', clean(body.text));
