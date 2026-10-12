@@ -7,7 +7,8 @@ const fail = (e) => ({ isError: true, content: [{ type: 'text', text: `Error: ${
 const wrap = (fn) => async (args) => { try { return text(await fn(args)); } catch (e) { return fail(e); } };
 const brief = (c) => ({
   id: c.id, type: c.type, title: c.title, priority: c.priority, status: c.status,
-  assignees: c.assignees, tags: c.tags,
+  assignees: c.assignees, tags: c.tags, due: c.due || undefined, milestone: c.milestone || undefined,
+  parent: c.parent || undefined, attachments: c.files?.length || undefined,
 });
 
 export function createServer({ base, token }) {
@@ -25,7 +26,7 @@ export function createServer({ base, token }) {
     instructions:
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
-      'for details, fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
+      'for details (use get_attachment to look at screenshots on the card), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
       'summary and clear step-by-step manual test instructions for the tester. Never mark ready if the fix is unfinished.',
   });
 
@@ -82,6 +83,22 @@ export function createServer({ base, token }) {
     inputSchema: { id: z.number().int(), text: z.string() },
   }, wrap(({ id, text }) => call('POST', `/cards/${id}/comment`, { text }).then(brief)));
 
+  server.registerTool('get_attachment', {
+    description: 'View an image attached to a card (e.g. a bug screenshot). Use get_card first to see the file ids. Videos cannot be viewed.',
+    inputSchema: { id: z.number().int().describe('Card id'), file_id: z.string() },
+  }, async ({ id, file_id }) => {
+    try {
+      const card = await call('GET', `/cards/${id}`);
+      const f = (card.files || []).find((x) => x.id === file_id);
+      if (!f) throw new Error('File not found on this card');
+      if (!f.mime.startsWith('image/')) return text(`"${f.name}" is a ${f.mime} file and cannot be viewed here.`);
+      const res = await fetch(base.replace(/\/$/, '') + `/api/files/${file_id}`, { headers: { 'x-devboard-token': token } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      return { content: [{ type: 'text', text: `${f.name} (${f.mime}, ${f.size} bytes)` }, { type: 'image', data: buf.toString('base64'), mimeType: f.mime }] };
+    } catch (e) { return fail(e); }
+  });
+
   server.registerTool('create_card', {
     description: 'Create a new ticket or task (e.g. a follow-up bug found while fixing).',
     inputSchema: {
@@ -89,6 +106,10 @@ export function createServer({ base, token }) {
       title: z.string(),
       description: z.string().optional(),
       priority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+      tags: z.array(z.string()).optional(),
+      due: z.string().optional().describe('YYYY-MM-DD'),
+      milestone: z.string().optional(),
+      parent: z.number().int().optional().describe('Parent card id (makes this a sub-card)'),
     },
   }, wrap((a) => call('POST', '/cards', a).then(brief)));
 

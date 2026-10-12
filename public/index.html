@@ -93,8 +93,66 @@ textarea{min-height:90px;resize:vertical}
 .hist{font-size:12px;color:var(--mute)}
 .status{font-size:11px;padding:1px 8px;border-radius:10px;font-weight:600}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
-@media(max-width:900px){main{grid-template-columns:repeat(4,260px)}}
 html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 20px;border-bottom:1px solid var(--line);background:#12141a}
+.filters input,.filters select{padding:6px 10px;font-size:13px;max-width:100%}
+.filters .q{flex:1;min-width:180px}
+.bellbox{position:relative}
+.bell{position:relative}
+.badge{position:absolute;top:-6px;right:-6px;background:var(--bad);color:#fff;border-radius:10px;font-size:10px;min-width:16px;height:16px;display:grid;place-content:center;padding:0 4px}
+.nmenu{position:absolute;right:0;top:115%;width:min(340px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px;z-index:6;display:none;max-height:60vh;overflow:auto}
+.nmenu.show{display:block}
+.nitem{padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}.nitem:hover{background:var(--line)}
+.nitem small{display:block;color:var(--mute);font-size:11px}
+.chiprow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.pill{font-size:11px;padding:1px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.pill.late{color:var(--bad);border-color:#5a2a2e;background:#221214}
+.pill.soon{color:var(--prog);border-color:#5a4a1e}
+.pill.ms{color:#8fe0b0;border-color:#24473a}
+.pill.prog{color:var(--test);border-color:#3d3360}
+.card[draggable=true]{cursor:grab}
+.card.dragging{opacity:.4}
+.col.over{outline:2px dashed var(--accent);outline-offset:-4px}
+.oldbtn{display:block;width:100%;background:none;border:1px dashed var(--line);color:var(--mute);border-radius:8px;padding:6px;cursor:pointer;font-size:12px}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.thumb{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg);aspect-ratio:4/3}
+.thumb img,.thumb video{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.thumb .x{position:absolute;top:4px;right:4px;background:#000a;border:0;color:#fff;border-radius:6px;width:22px;height:22px;cursor:pointer}
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:12px;text-align:center;color:var(--mute);font-size:12px;margin-top:8px}
+.drop.over{border-color:var(--accent);color:var(--text)}
+.ck{display:flex;gap:10px;align-items:flex-start;padding:6px 0;cursor:pointer}
+.ck input{margin-top:3px;width:16px;height:16px;accent-color:#4ade80}
+.ck.done span{color:var(--mute);text-decoration:line-through}
+.lnk{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13px}
+.lnk a{color:var(--accent);cursor:pointer;text-decoration:none}.lnk a:hover{text-decoration:underline}
+.lnk .x{margin-left:auto;background:none;border:0;color:var(--mute);cursor:pointer}
+table.sum{width:100%;border-collapse:collapse;font-size:13px}
+table.sum th,table.sum td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+table.sum th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.kpi{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kpi b{display:block;font-size:20px}.kpi small{color:var(--mute);font-size:11px}
+.sugg{position:absolute;left:0;bottom:100%;background:var(--panel);border:1px solid var(--line);border-radius:8px;z-index:7;min-width:180px;overflow:hidden}
+.sugg div{padding:6px 10px;cursor:pointer;font-size:13px}.sugg div:hover,.sugg div.on{background:var(--line)}
+#lbDlg{width:auto;max-width:96vw;background:transparent;border:0}
+#lbDlg img{max-width:94vw;max-height:88vh;border-radius:10px;display:block;margin:auto}
+.tabs{display:none;gap:6px;padding:10px 12px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.tabs button{flex:none;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:6px 12px;color:var(--mute);cursor:pointer;font-size:13px}
+.tabs button.on{color:var(--text);border-color:var(--accent)}
+.card .title{word-break:break-word}
+@media(max-width:900px){main{grid-template-columns:repeat(2,minmax(240px,1fr))}}
+@media(max-width:760px){
+  header{padding:10px 12px;gap:8px}h1{font-size:15px}
+  .filters{padding:8px 12px}
+  .tabs{display:flex}
+  main{display:block;padding:12px}
+  .col{display:none}.col.active{display:block}
+  .btn,.seg button{padding:8px 12px}
+  .chk input{width:20px;height:20px}
+  dialog{width:100vw;max-width:100vw;max-height:100vh;height:100vh;border-radius:0}
+  .actions .btn{flex:1}
+}
 </style>
 </head>
 <body>
@@ -107,16 +165,24 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
     <button data-v="" class="on" data-i18n="everyone"></button><button data-v="mine" data-i18n="mine"></button><button data-v="unassigned" data-i18n="unassigned"></button>
   </div>
   <span class="sp"></span>
+  <div class="bellbox"><button class="btn bell" id="bellBtn" title="Notifications">🔔<span class="badge" id="bellBadge" hidden></span></button><div class="nmenu" id="bellMenu"></div></div>
+  <button class="btn" id="sumBtn" data-i18n="summary"></button>
   <div class="seg" id="langSeg" title="Language / ภาษา"><button data-v="th">TH</button><button data-v="en">EN</button></div>
   <button class="btn" id="helpBtn" data-i18n="help"></button>
   <button class="btn primary" id="newBtn" data-i18n="new"></button>
   <div id="userBox" class="userbox"></div>
 </header>
+<div class="filters" id="filters">
+  <input class="q" id="fq" type="search" data-i18n-ph="search_ph">
+  <select id="fpri"></select><select id="ftag"></select><select id="fown"></select><select id="fms"></select>
+  <button class="btn" id="fclear" data-i18n="clear" hidden></button>
+</div>
+<div class="tabs" id="tabs"></div>
 <main id="board"></main>
 <div id="toast"></div>
 
-<dialog id="newDlg"><form class="dlg" method="dialog" id="newForm">
-  <h3 data-i18n="newcard"></h3>
+<dialog id="cardDlg"><form class="dlg" method="dialog" id="cardForm">
+  <h3 id="cardDlgTitle"></h3>
   <div class="row">
     <label style="flex:1"><span data-i18n="type"></span><select name="type"><option value="ticket" data-i18n="ticket_opt"></option><option value="task" data-i18n="task_opt"></option></select></label>
     <label style="flex:1"><span data-i18n="priority"></span><select name="priority"><option value="low" data-i18n="pri_low"></option><option value="medium" selected data-i18n="pri_medium"></option><option value="high" data-i18n="pri_high"></option><option value="critical" data-i18n="pri_critical"></option></select></label>
@@ -124,7 +190,15 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
   <label><span data-i18n="title"></span><input name="title" required maxlength="200"></label>
   <label><span data-i18n="desc"></span><textarea name="description"></textarea></label>
   <label><span data-i18n="tags"></span><input name="tags"></label>
-  <div class="actions"><span class="sp"></span><button class="btn" value="cancel" formnovalidate data-i18n="cancel"></button><button class="btn primary" value="ok" data-i18n="create"></button></div>
+  <div class="row">
+    <label style="flex:1"><span data-i18n="due"></span><input name="due" type="date"></label>
+    <label style="flex:1"><span data-i18n="milestone"></span><input name="milestone" list="msList" maxlength="40"></label>
+    <label style="flex:1"><span data-i18n="parent_label"></span><input name="parent" type="number" min="1"></label>
+  </div>
+  <datalist id="msList"></datalist>
+  <label id="newFilesRow"><span data-i18n="attach_files"></span><input id="newFiles" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm"></label>
+  <div class="err" id="cardErr"></div>
+  <div class="actions"><span class="sp"></span><button class="btn" value="cancel" formnovalidate data-i18n="cancel"></button><button class="btn primary" value="ok" id="cardSubmit"></button></div>
 </form></dialog>
 
 <dialog id="loginDlg"><form class="dlg" id="loginForm">
@@ -191,7 +265,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
     <details data-h="tester"><summary>Tester: เทสและปิดงาน</summary><ol>
       <li>ดูคอลัมน์ <b>พร้อมเทส</b> แล้วเปิดการ์ด</li>
       <li>อ่านหัวข้อ <b>🧪 วิธีเทส</b> ทำตามขั้นตอนทีละข้อ</li>
-      <li>ผ่านหมด → กด <b>✓ ผ่าน → เสร็จสิ้น</b></li>
+      <li>ติ๊กขั้นตอนเทส<b>ทีละข้อ</b> เมื่อติ๊กครบแล้วกด <b>✓ ผ่าน → เสร็จสิ้น</b> (ถ้าติ๊กไม่ครบจะกดผ่านไม่ได้)</li>
       <li>ไม่ผ่าน → กด <b>✗ ไม่ผ่าน</b> พร้อมเหตุผล การ์ดกลับไปกำลังทำ และเหตุผลจะถูกบันทึกเป็นคอมเมนต์</li>
       <li>ถ้างานที่ปิดไปแล้วมีปัญหากลับมา กด <b>เปิดใหม่</b></li></ol></details>
     <details data-h="admin"><summary>Admin: จัดการทีม</summary><ol>
@@ -200,6 +274,15 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>คนที่ไม่อยู่ในรายชื่อจะ login ไม่ได้ เปลี่ยน role หรือลบคนออกได้ในหน้าเดียวกัน</li>
       <li>ถ้าคนรับงานไปแล้วทำไม่ได้ เปิดการ์ดแล้วกด <b>ปล่อยการ์ดจาก …</b> เพื่อดึงคืน</li>
       <li>ลบการ์ด: เปิดการ์ด แล้วกด <b>🗑 ลบการ์ด</b> (เฉพาะ admin ลบแล้วกู้คืนไม่ได้)</li></ol></details>
+    <details><summary>ฟีเจอร์อื่นๆ</summary><ul>
+      <li><b>ลากการ์ด</b>ข้ามคอลัมน์ได้: เปิด→กำลังทำ (รับงาน), กำลังทำ→เปิด (ปล่อย), พร้อมเทส→เสร็จสิ้น หรือกลับไปกำลังทำ (Tester)</li>
+      <li><b>ค้นหา/กรอง</b> ที่แถบใต้หัวเว็บ: ค้นหา ความสำคัญ tag คนรับ milestone</li>
+      <li><b>ไฟล์แนบ</b>: เปิดการ์ด แล้วลากไฟล์มาวาง หรือกด Ctrl+V วางรูปจากคลิปบอร์ด รูปจะถูกย่อให้อัตโนมัติ และ Claude ดูรูปได้ผ่าน MCP</li>
+      <li><b>วันกำหนดส่ง / Milestone</b> ตั้งตอนสร้างหรือแก้ไขการ์ด ใบที่เลยกำหนดจะขึ้นสีแดง</li>
+      <li><b>ลิงก์การ์ด</b>: ตั้งการ์ดแม่/การ์ดย่อย หรือเชื่อมการ์ดที่เกี่ยวข้องกัน</li>
+      <li><b>แท็กคน</b>ในคอมเมนต์ด้วย <code>@ชื่อ</code> และกระดิ่ง 🔔 สรุปสิ่งที่เกี่ยวกับคุณ</li>
+      <li><b>แจ้งเตือน Discord</b> เมื่อพร้อมเทส / เทสไม่ผ่าน / เสร็จสิ้น / ถูกแท็ก (เมื่อ admin ตั้งค่าไว้)</li>
+      <li><b>คัดลอกเป็นข้อความ</b> ในหน้าการ์ด เพื่อส่งต่อให้คนนอกระบบ · <b>📊 สรุป</b> ดูภาพรวมของทีม</li></ul></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
       <li><b>dev</b>: รับ/ปล่อยการ์ด ส่งพร้อมเทส (ผ่าน Claude)</li>
       <li><b>tester</b>: ผ่าน / ไม่ผ่าน / เปิดใหม่</li>
@@ -230,7 +313,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
     <details data-h="tester"><summary>Tester: test and close</summary><ol>
       <li>Look at the <b>Ready to Test</b> column and open a card</li>
       <li>Read <b>🧪 How to test</b> and follow the steps one by one</li>
-      <li>All good → click <b>✓ Pass → Complete</b></li>
+      <li>Tick each test step <b>one by one</b>; once all are ticked, click <b>✓ Pass → Complete</b> (Pass is blocked until every step is ticked)</li>
       <li>Not working → click <b>✗ Fail</b> with a reason. The card goes back to In Progress and the reason is saved as a comment</li>
       <li>If a closed card turns out to be broken, click <b>Reopen</b></li></ol></details>
     <details data-h="admin"><summary>Admin: manage the team</summary><ol>
@@ -239,6 +322,15 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>People not on the list can't sign in. Change roles or remove people on the same screen</li>
       <li>If the owner can't finish, open the card and click <b>Release from …</b> to take it back</li>
       <li>Delete a card: open it and click <b>🗑 Delete</b> (admin only, cannot be undone)</li></ol></details>
+    <details><summary>More features</summary><ul>
+      <li><b>Drag cards</b> between columns: Open→In Progress (claim), In Progress→Open (release), Ready to Test→Complete or back to In Progress (testers)</li>
+      <li><b>Search / filter</b> in the bar under the header: search, priority, tag, owner, milestone</li>
+      <li><b>Attachments</b>: open a card, then drop files or press Ctrl+V to paste an image. Images are shrunk automatically and Claude can look at them through MCP</li>
+      <li><b>Due date / Milestone</b> when creating or editing a card. Overdue cards turn red</li>
+      <li><b>Links</b>: set a parent / sub-cards, or link related cards</li>
+      <li><b>Mention people</b> in comments with <code>@name</code>; the 🔔 bell summarises what concerns you</li>
+      <li><b>Discord alerts</b> on ready to test / test failed / complete / mentions (when an admin has set it up)</li>
+      <li><b>Copy as text</b> in the card to share outside the tool · <b>📊 Summary</b> for the team overview</li></ul></details>
     <details><summary>What can each role do?</summary><ul>
       <li><b>dev</b>: claim/release cards, send to Ready to Test (via Claude)</li>
       <li><b>tester</b>: Pass / Fail / Reopen</li>
@@ -249,244 +341,11 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
 </div></dialog>
 
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
+<dialog id="sumDlg"><div class="dlg"><h3 data-i18n="summary"></h3><div id="sumBody" class="help" style="max-height:72vh"></div>
+  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#sumDlg').close()" data-i18n="close"></button></div></div></dialog>
+<dialog id="lbDlg"><img id="lbImg" alt=""></dialog>
 
-<script>
-const I18N={
-en:{all:'All',tickets:'Tickets',tasks:'Tasks',everyone:'Everyone',mine:'Mine',unassigned:'Unassigned',help:'? Guide',new:'+ New',
- s_open:'Open',s_in_progress:'In Progress',s_ready_to_test:'Ready to Test',s_complete:'Complete',
- newcard:'New card',type:'Type',ticket_opt:'Ticket (bug / request)',task_opt:'Task',priority:'Priority',
- pri_low:'low',pri_medium:'medium',pri_high:'high',pri_critical:'critical',
- title:'Title',desc:'Description (steps to reproduce, expected result, etc.)',tags:'Tags (comma separated, e.g. UI, Combat, Audio)',
- cancel:'Cancel',create:'Create',signin_google:'Sign in with your Google account',dev_login:'Dev-only email login',continue:'Continue',
- team:'Team & roles',ph_email:'email',ph_name:'name',add:'Add',close:'Close',remove:'Remove',confirm_remove:'Remove {0}?',
- token_title:'Connect Claude (MCP)',token_note:'Copy this command and run it in a terminal (no download needed). The token is personal. Do not share it or paste it into a chat.',token_after:'Then restart Claude Code and run /mcp to check that geckoboard is connected.',copy:'Copy',copied:'Copied ✓',no_cli:'No `claude` command / using the desktop app?',no_cli_note:'Add this block to the top-level "mcpServers" of ~/.claude.json (C:\\Users\\<you>\\.claude.json on Windows), then restart Claude Code. Or install the CLI: npm i -g @anthropic-ai/claude-code',rotate:'Regenerate token',confirm_rotate:'Generate a new token? The old one stops working and you must re-run the command.',
- help_title:'How to use GeckoBoard',menu_token:'Connect Claude (MCP)',menu_team:'Team & roles',menu_out:'Sign out',
- claim:"✋ I'll do this",release:'Release',pass:'✓ Pass → Complete',fail:'✗ Fail → back to dev',reopen:'Reopen',
- by:'by',noassignee:'Unassigned',howtest:'🧪 How to test',comments:'Comments',nocomments:'No comments',writecomment:'Write a comment…',send:'Send',history:'History',
- failprompt:'Why did the test fail?',tick_tip:'Tick = I will do this',claimed_by:'Claimed by {0}',you:'You',working:'working on this',did_it:'did this',release_other:'Release from {0}',confirm_release_other:'Take this card away from {0}?',already:'Already claimed by {0}. Pick another card.',delete:'Delete',confirm_delete:'Delete card #{0} "{1}"? This cannot be undone.',noGoogle:'Google sign-in is not configured on the server.',googleFail:'Could not load Google sign-in',
- a_created:'created',a_claimed:'claimed',a_unclaimed:'released',a_ready_to_test:'marked ready to test',a_complete:'passed (complete)',a_test_failed:'test failed',a_reopened:'reopened',a_commented:'commented',a_edited:'edited'},
-th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุกคน',mine:'ของฉัน',unassigned:'ยังไม่มีคนรับ',help:'? วิธีใช้',new:'+ สร้างการ์ด',
- s_open:'เปิด',s_in_progress:'กำลังทำ',s_ready_to_test:'พร้อมเทส',s_complete:'เสร็จสิ้น',
- newcard:'สร้างการ์ดใหม่',type:'ประเภท',ticket_opt:'Ticket (บั๊ก / คำขอ)',task_opt:'Task (งานที่ต้องทำ)',priority:'ความสำคัญ',
- pri_low:'ต่ำ',pri_medium:'ปานกลาง',pri_high:'สูง',pri_critical:'วิกฤต',
- title:'หัวข้อ',desc:'รายละเอียด (ขั้นตอนทำซ้ำ ผลที่คาดหวัง ฯลฯ)',tags:'Tag (คั่นด้วยจุลภาค เช่น UI, Combat, Audio)',
- cancel:'ยกเลิก',create:'สร้าง',signin_google:'ลงชื่อเข้าใช้ด้วยบัญชี Google',dev_login:'เข้าสู่ระบบด้วยอีเมล (สำหรับ dev เท่านั้น)',continue:'ดำเนินการต่อ',
- team:'ทีมและสิทธิ์',ph_email:'อีเมล',ph_name:'ชื่อ',add:'เพิ่ม',close:'ปิด',remove:'ลบ',confirm_remove:'ลบ {0} ออกจากทีม?',
- token_title:'เชื่อมต่อ Claude (MCP)',token_note:'Copy คำสั่งนี้ไปรันใน terminal (ไม่ต้องดาวน์โหลดอะไรเพิ่ม) Token เป็นของคุณคนเดียว ห้ามแชร์หรือวางลงในแชต',token_after:'จากนั้นเปิด Claude Code ใหม่ แล้วพิมพ์ /mcp เพื่อเช็กว่า geckoboard เชื่อมต่อแล้ว',copy:'คัดลอก',copied:'คัดลอกแล้ว ✓',no_cli:'ไม่มีคำสั่ง claude / ใช้แอป Desktop?',no_cli_note:'เพิ่มบล็อกนี้ใน "mcpServers" ระดับบนสุดของไฟล์ ~/.claude.json (Windows: C:\\Users\\<ชื่อคุณ>\\.claude.json) แล้วเปิด Claude Code ใหม่ หรือติดตั้ง CLI: npm i -g @anthropic-ai/claude-code',rotate:'สร้าง token ใหม่',confirm_rotate:'สร้าง token ใหม่? token เก่าจะใช้ไม่ได้ทันที และต้องรันคำสั่งใหม่',
- help_title:'วิธีใช้ GeckoBoard',menu_token:'เชื่อมต่อ Claude (MCP)',menu_team:'ทีมและสิทธิ์',menu_out:'ออกจากระบบ',
- claim:'✋ ฉันจะทำงานนี้',release:'ปล่อยการ์ด',pass:'✓ ผ่าน → เสร็จสิ้น',fail:'✗ ไม่ผ่าน → ส่งกลับให้ Dev',reopen:'เปิดใหม่',
- by:'โดย',noassignee:'ยังไม่มีคนรับ',howtest:'🧪 วิธีเทส',comments:'ความคิดเห็น',nocomments:'ยังไม่มีความคิดเห็น',writecomment:'เขียนความคิดเห็น…',send:'ส่ง',history:'ประวัติ',
- failprompt:'ทำไมเทสไม่ผ่าน?',tick_tip:'ติ๊ก = ฉันจะทำงานนี้',claimed_by:'ถูกรับโดย {0}',you:'คุณ',working:'กำลังทำงานนี้',did_it:'เป็นคนทำ',release_other:'ปล่อยการ์ดจาก {0}',confirm_release_other:'ดึงการ์ดนี้คืนจาก {0} ใช่ไหม?',already:'{0} รับการ์ดนี้ไปแล้ว กรุณาเลือกใบอื่น',delete:'ลบการ์ด',confirm_delete:'ลบการ์ด #{0} "{1}" ใช่ไหม? ลบแล้วกู้คืนไม่ได้',noGoogle:'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google sign-in',googleFail:'โหลด Google sign-in ไม่สำเร็จ',
- a_created:'สร้างการ์ด',a_claimed:'รับงาน',a_unclaimed:'ปล่อยการ์ด',a_ready_to_test:'ส่งพร้อมเทส',a_complete:'เทสผ่าน (เสร็จสิ้น)',a_test_failed:'เทสไม่ผ่าน',a_reopened:'เปิดใหม่',a_commented:'คอมเมนต์',a_edited:'แก้ไข'}
-};
-let lang='en';
-try{lang=localStorage.getItem('geckoboard.lang')||(/^th/i.test(navigator.language)?'th':'en')}catch{}
-const t=(k,...a)=>(I18N[lang][k]??I18N.en[k]??k).replace(/\{(\d)\}/g,(_,i)=>a[i]);
-
-const COLS=[['open','--open'],['in_progress','--prog'],['ready_to_test','--test'],['complete','--done']];
-const COLOR=Object.fromEntries(COLS);
-let cards=[],fType='',fWho='',openId=null,user=null,users=[];
-const $=s=>document.querySelector(s);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const nameOf=e=>users.find(u=>u.email===e)?.name||e;
-const role=(...r)=>user&&r.includes(user.role);
-const hue=e=>{let h=0;for(const ch of String(e))h=(h*31+ch.charCodeAt(0))%360;return h};
-const avatar=(e,cls='')=>`<span class="av ${cls}" style="background:hsl(${hue(e)} 45% 40%)">${esc([...nameOf(e)][0]?.toUpperCase()||'?')}</span>`;
-let toastT;const toast=m=>{const el=$('#toast');el.textContent=m;el.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>el.style.display='none',3500)};
-const LOCK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-const locale=()=>lang==='th'?'th-TH':'en-GB';
-
-function applyLang(){
-  document.documentElement.lang=lang;
-  document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
-  document.querySelectorAll('[data-i18n-ph]').forEach(el=>el.placeholder=t(el.dataset.i18nPh));
-  document.querySelectorAll('#langSeg button,[data-langseg] button').forEach(b=>b.classList.toggle('on',b.dataset.v===lang));
-  $('#flow').innerHTML=COLS.map(([k,c],i)=>`${i?'→':''}<span style="color:var(${c})">${t('s_'+k)}</span>`).join('');
-  if(user)renderUserBox();
-  if($('#teamDlg').open)renderTeam();
-  render();
-  if(openId&&$('#viewDlg').open)showCard(openId,true);
-}
-function setLang(l){lang=l;try{localStorage.setItem('geckoboard.lang',l)}catch{};applyLang()}
-document.querySelectorAll('#langSeg button,[data-langseg] button').forEach(b=>b.onclick=()=>setLang(b.dataset.v));
-
-async function api(method,path,body){
-  const r=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
-  const d=await r.json(); if(r.status===401&&path!=='/login'){showLogin()} if(!r.ok){const er=new Error(d.error||r.status);er.data=d;throw er} return d;
-}
-async function load(){ if(!user)return; try{[cards,users]=await Promise.all([api('GET','/cards'),api('GET','/users')]);render(); if(openId&&$('#viewDlg').open) showCard(openId,true)}catch(e){console.error(e)} }
-
-function showLogin(){ user=null; $('#userBox').innerHTML=''; if(!$('#loginDlg').open)$('#loginDlg').showModal(); initLogin() }
-function renderUserBox(){
-  const u=user;
-  $('#userBox').innerHTML=`<div class="chip" id="chip"><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
-   <div class="menu" id="menu">
-     <button data-m="token">${t('menu_token')}</button>
-     ${u.role==='admin'?`<button data-m="team">${t('menu_team')}</button>`:''}
-     <button data-m="out">${t('menu_out')}</button></div>`;
-  $('#chip').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('show')};
-  $('#menu').querySelectorAll('button').forEach(b=>b.onclick=()=>menuAct(b.dataset.m));
-}
-function setUser(u){
-  user=u; $('#loginDlg').close(); if(window.__showHelp){window.__showHelp=false;$('#helpBtn').click()}
-  renderUserBox(); load();
-}
-document.addEventListener('click',()=>$('#menu')?.classList.remove('show'));
-async function menuAct(m){
-  if(m==='out'){await api('POST','/logout',{});showLogin()}
-  if(m==='token'){const me=await api('GET','/me');
-    showToken(me.token);$('#tokenDlg').showModal()}
-  if(m==='team'){renderTeam();$('#teamDlg').showModal()}
-}
-const mcpCmd=tok=>`claude mcp add --scope user --transport http geckoboard ${location.origin}/mcp --header "Authorization: Bearer ${tok}"`;
-function showToken(tok){
-  $('#tokenCmd').textContent=mcpCmd(tok);
-  $('#tokenJson').textContent=JSON.stringify({mcpServers:{geckoboard:{type:'http',url:location.origin+'/mcp',headers:{Authorization:'Bearer '+tok}}}},null,2);
-}
-$('#copyJsonBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('#tokenJson').textContent);$('#copyJsonBtn').textContent=t('copied')}catch{}setTimeout(()=>$('#copyJsonBtn').textContent=t('copy'),1500)};
-$('#copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText($('#tokenCmd').textContent);$('#copyBtn').textContent=t('copied')}catch{const r=document.createRange();r.selectNodeContents($('#tokenCmd'));getSelection().removeAllRanges();getSelection().addRange(r)}setTimeout(()=>$('#copyBtn').textContent=t('copy'),1500)};
-$('#rotateBtn').onclick=async()=>{if(!confirm(t('confirm_rotate')))return;try{showToken((await api('POST','/me/rotate-token',{})).token)}catch(e){alert(e.message)}};
-function renderTeam(){
-  $('#teamList').innerHTML=users.map(u=>`<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span>
-    <select data-e="${esc(u.email)}">${['admin','dev','tester'].map(r=>`<option ${r===u.role?'selected':''}>${r}</option>`).join('')}</select>
-    <button class="btn bad" data-del="${esc(u.email)}">${t('remove')}</button></div>`).join('');
-  $('#teamList').querySelectorAll('select').forEach(sel=>sel.onchange=async()=>{
-    try{await api('PATCH','/users/'+encodeURIComponent(sel.dataset.e),{role:sel.value});$('#teamErr').textContent='';await load();if(sel.dataset.e===user.email)user.role=sel.value}catch(e){$('#teamErr').textContent=e.message;await load();renderTeam()}});
-  $('#teamList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
-    if(!confirm(t('confirm_remove',b.dataset.del)))return;
-    try{await api('DELETE','/users/'+encodeURIComponent(b.dataset.del));$('#teamErr').textContent='';await load();renderTeam()}catch(e){$('#teamErr').textContent=e.message}});
-}
-$('#addUserForm').addEventListener('submit',async e=>{e.preventDefault();
-  try{await api('POST','/users',Object.fromEntries(new FormData(e.target)));e.target.reset();$('#teamErr').textContent='';await load();renderTeam()}catch(err){$('#teamErr').textContent=err.message}});
-let cfg=null;
-async function initLogin(){
-  cfg=cfg||await api('GET','/config');
-  $('#emailLogin').hidden=!cfg.emailLogin;
-  if(!cfg.googleClientId){ if(!cfg.emailLogin)$('#loginErr').textContent=t('noGoogle'); return }
-  if(!window.google){ await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)}).catch(()=>{$('#loginErr').textContent=t('googleFail');}) }
-  if(!window.google)return;
-  google.accounts.id.initialize({client_id:cfg.googleClientId,callback:async r=>{
-    try{setUser(await api('POST','/login/google',{credential:r.credential}))}catch(err){$('#loginErr').textContent=err.message}}});
-  $('#gbtn').innerHTML=''; google.accounts.id.renderButton($('#gbtn'),{theme:'filled_black',size:'large',shape:'rectangular',locale:lang});
-}
-$('#loginForm').addEventListener('submit',async e=>{e.preventDefault();
-  try{setUser(await api('POST','/login',Object.fromEntries(new FormData(e.target))))}catch(err){$('#loginErr').textContent=err.message}});
-$('#loginDlg').addEventListener('cancel',e=>e.preventDefault());
-
-function visible(c){
-  if(fType&&c.type!==fType)return false;
-  if(fWho==='mine')return !!user&&c.assignees.includes(user.email);
-  if(fWho==='unassigned')return c.assignees.length===0;
-  return true;
-}
-function render(){
-  $('#board').innerHTML=COLS.map(([k,col])=>{
-    const list=cards.filter(c=>c.status===k&&visible(c)).sort((a,b)=>b.updated_at.localeCompare(a.updated_at));
-    return `<section class="col"><h2><span class="dot" style="background:var(${col})"></span>${t('s_'+k)}<span class="count">${list.length}</span></h2>`+
-      (list.map(cardHtml).join('')||'<div class="empty">—</div>')+'</section>';
-  }).join('');
-}
-function cardHtml(c){
-  const owner=c.assignees[0], mine=!!user&&c.assignees.includes(user.email);
-  const lockedByOther=!!owner&&!mine;
-  const canTick=role('dev','admin')&&c.status!=='complete'&&c.status!=='ready_to_test';
-  let ctl='';
-  if(canTick&&!lockedByOther) ctl=`<label class="chk" title="${t('tick_tip')}"><input type="checkbox" data-claim="${c.id}" ${mine?'checked':''}></label>`;
-  else if(lockedByOther&&canTick) ctl=`<span class="lock" title="${esc(t('claimed_by',nameOf(owner)))}">${LOCK}</span>`;
-  const claim=owner?`<div class="claim${mine?' me':''}">${avatar(owner)}<span>${mine?`<b>${t('you')}</b>`:`<b>${esc(nameOf(owner))}</b>`} · ${t(c.status==='complete'?'did_it':'working')}</span></div>`:'';
-  return `<div class="card${mine?' mine':''}${lockedByOther?' locked':''}" data-id="${c.id}">
-    <div class="row">${ctl}<span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
-    <span class="meta pri-${c.priority}" style="margin-left:auto">${t('pri_'+c.priority)}</span></div>
-    <div class="title">${esc(c.title)}</div>
-    ${c.tags.length?`<div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>`:''}
-    ${claim}</div>`;
-}
-
-function showCard(id,keep){
-  const c=cards.find(x=>x.id===id); if(!c)return;
-  openId=id; const mine=c.assignees.includes(user.email);
-  const acts=[]; const owner=c.assignees[0];
-  if(c.status!=='complete'&&role('dev','admin')){
-    if(mine) acts.push(`<button class="btn" data-a="unclaim">${t('release')}</button>`);
-    else if(!owner) acts.push(`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
-    else if(role('admin')) acts.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other',nameOf(owner))}</button>`);
-  }
-  if(c.status==='ready_to_test'&&role('tester','admin')) acts.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
-  if(c.status==='complete'&&role('tester','admin')) acts.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
-  if(role('admin')) acts.push(`<button class="btn danger" data-a="delete" style="margin-left:auto">🗑 ${t('delete')}</button>`);
-  $('#viewBody').innerHTML=`
-    <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id} · ${t('by')} ${esc(nameOf(c.reporter))} · <span class="pri-${c.priority}">${t('pri_'+c.priority)}</span></span>
-      <span class="status" style="margin-left:auto;color:var(${COLOR[c.status]});border:1px solid var(${COLOR[c.status]})">${t('s_'+c.status)}</span></div>
-    <h3>${esc(c.title)}</h3>
-    ${c.tags.length?`<div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>`:''}
-    <div class="banner${mine?' me':''}">${owner?avatar(owner,'lg'):`<span class="av lg" style="background:var(--line);color:var(--mute)">?</span>`}
-      <div class="who">${owner?`<b>${mine?t('you'):esc(nameOf(owner))}</b><small>${t(c.status==='complete'?'did_it':'working')}</small>`:`<span class="meta">${t('noassignee')}</span>`}</div></div>
-    ${c.description?`<div class="box">${esc(c.description)}</div>`:''}
-    ${c.test_steps.length?`<div class="sec"><h4>${t('howtest')}</h4>
-      ${c.dev_summary?`<div class="box testbox" style="margin-bottom:8px">${esc(c.dev_summary)}</div>`:''}
-      <ol class="steps">${c.test_steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></div>`:''}
-    <div class="actions">${acts.join('')}</div>
-    <div class="sec"><h4>${t('comments')}</h4>
-      ${c.comments.map(m=>`<div class="cm"><b>${esc(nameOf(m.user))}</b> ${esc(m.text)}</div>`).join('')||`<div class="meta">${t('nocomments')}</div>`}
-      <div class="row" style="margin-top:8px"><input id="cmt" placeholder="${t('writecomment')}" style="flex:1"><button class="btn" data-a="comment">${t('send')}</button></div></div>
-    <details class="sec hist"><summary>${t('history')}</summary>${c.history.map(h=>`<div>${new Date(h.at).toLocaleString(locale())} · ${esc(nameOf(h.user))} · ${esc(t('a_'+h.action))} ${esc(h.text)}</div>`).join('')}</details>
-    <div class="actions"><span class="sp"></span><button class="btn" data-a="close">${t('close')}</button></div>`;
-  $('#viewBody').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>act(c,b.dataset.a));
-  if(!keep&&!$('#viewDlg').open)$('#viewDlg').showModal();
-}
-async function act(c,a){
-  if(a==='close')return $('#viewDlg').close();
-  if(a==='unclaim_other'){
-    const em=$('#viewBody [data-a=unclaim_other]').dataset.email;
-    if(!confirm(t('confirm_release_other',nameOf(em))))return;
-    try{await api('POST',`/cards/${c.id}/unclaim`,{email:em});await load()}catch(e){alert(e.message)}
-    return;
-  }
-  if(a==='delete'){
-    if(!confirm(t('confirm_delete',c.id,c.title)))return;
-    try{await api('DELETE','/cards/'+c.id);$('#viewDlg').close();await load()}catch(e){alert(e.message)}
-    return;
-  }
-  try{
-    let body={};
-    if(a==='comment'){body.text=$('#cmt').value; if(!body.text.trim())return}
-    if(a==='fail'){body.text=prompt(t('failprompt')); if(!body.text)return}
-    if(a==='pass'){body.text=''}
-    try{await api('POST',`/cards/${c.id}/${a}`,body)}catch(er){await load(); if(er.data?.claimed_by){toast(t('already',nameOf(er.data.claimed_by)));return} throw er}
-    await load();
-    if(a==='pass'||a==='fail')$('#viewDlg').close();
-  }catch(e){alert(e.message)}
-}
-$('#viewDlg').addEventListener('close',()=>openId=null);
-
-$('#helpBtn').onclick=()=>{
-  const mine=user?.role;
-  document.querySelectorAll('#helpDlg details[data-h]').forEach(d=>d.open=(d.dataset.h==='all'||d.dataset.h===mine));
-  $('#helpDlg').showModal();
-};
-try{ if(!localStorage.getItem('devboard.helpSeen')){ localStorage.setItem('devboard.helpSeen','1'); window.__showHelp=true } }catch{}
-$('#newBtn').onclick=()=>$('#newDlg').showModal();
-$('#newForm').addEventListener('submit',async e=>{
-  if(e.submitter?.value!=='ok'){return}
-  const f=Object.fromEntries(new FormData(e.target));
-  try{await api('POST','/cards',f); e.target.reset(); await load()}catch(err){alert(err.message)}
-});
-for(const [id,setter] of [['#typeSeg',v=>fType=v],['#whoSeg',v=>fWho=v]]){
-  document.querySelectorAll(id+' button').forEach(b=>b.onclick=()=>{
-    document.querySelectorAll(id+' button').forEach(x=>x.classList.remove('on'));b.classList.add('on');setter(b.dataset.v);render()});
-}
-$('#board').addEventListener('click',async e=>{
-  const box=e.target.closest('input[data-claim]');
-  if(box){ // tick = "I'll do this", untick = release; never opens the card
-    e.stopPropagation(); box.disabled=true;
-    try{await api('POST',`/cards/${box.dataset.claim}/${box.checked?'claim':'unclaim'}`,{})}
-    catch(err){ await load(); toast(err.data?.claimed_by?t('already',nameOf(err.data.claimed_by)):err.message) }
-    await load(); return;
-  }
-  if(e.target.closest('.chk'))return;
-  const el=e.target.closest('.card');if(el)showCard(+el.dataset.id)});
-applyLang();
-api('GET','/me').then(setUser).catch(showLogin); setInterval(load,5000);
-</script>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

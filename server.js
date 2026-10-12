@@ -13,6 +13,14 @@ const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'db.json');
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const TOKENINFO_URL = process.env.GOOGLE_TOKENINFO_URL || 'https://oauth2.googleapis.com/tokeninfo';
 const INSECURE_LOGIN = process.env.ALLOW_INSECURE_EMAIL_LOGIN === '1'; // local dev only: email without verification
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
+const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(path.dirname(DB_FILE), 'uploads');
+const FILE_TYPES = { // allowed attachments: mime -> max bytes
+  'image/png': 6e6, 'image/jpeg': 6e6, 'image/gif': 8e6, 'image/webp': 6e6,
+  'video/mp4': 12e6, 'video/webm': 12e6,
+};
+const MAX_FILES_PER_CARD = 8;
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase(); // bootstrap admin
 
 export const STATUSES = ['open', 'in_progress', 'ready_to_test', 'complete'];
@@ -27,7 +35,7 @@ const DATABASE_URL = process.env.DATABASE_URL || '';
 if (DATABASE_URL) { // fail early with a readable message (never prints the password)
   let u;
   try { u = new URL(DATABASE_URL); } catch { /* handled below */ }
-  if (!u || !/^postgres(ql)?:$/.test(u.protocol) || !u.hostname.includes('.')) {
+  if (!u || !/^postgres(ql)?:$/.test(u.protocol) || !(u.hostname.includes('.') || u.hostname === 'localhost')) {
     console.error('DATABASE_URL is not a valid Postgres connection string. Paste only the value, e.g. postgresql://user:password@ep-xxxx.region.aws.neon.tech/dbname?sslmode=require (no quotes, no "psql", no "DATABASE_URL=" prefix).');
     process.exit(1);
   }
@@ -38,12 +46,16 @@ const pool = DATABASE_URL
   : null;
 if (pool) {
   await pool.query('CREATE TABLE IF NOT EXISTS devboard_state (id int PRIMARY KEY, data jsonb NOT NULL)');
+  await pool.query('CREATE TABLE IF NOT EXISTS devboard_files (id text PRIMARY KEY, card_id int, mime text NOT NULL, data bytea NOT NULL)');
   const r = await pool.query('SELECT data FROM devboard_state WHERE id = 1');
   if (r.rows[0]) db = r.rows[0].data;
 } else {
   try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
 }
 db.users ||= []; db.sessions ||= {};
+for (const c of db.cards) { // upgrade older cards with the newer fields
+  c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; c.test_checks ??= (c.test_steps || []).map(() => false);
+}
 // Seed team from data/users.seed.json (adds missing emails only; later role changes in the UI are kept)
 try {
   const seed = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'users.seed.json'), 'utf8'));
@@ -91,6 +103,71 @@ function authUser(req) {
 const can = (user, ...roles) => roles.includes(user.role);
 const forbid = (user, ...roles) => need(can(user, ...roles), 403, `Role "${user.role}" is not allowed to do this`);
 
+const nameOfUser = (email) => db.users.find((u) => u.email === email)?.name || email;
+// Discord webhook (fire-and-forget; never blocks or breaks the request)
+const COLORS = { ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ade80, mention: 0x7c8cff };
+function notify(event, card, actor, text = '') {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const titles = {
+    ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev',
+    complete: '✅ Complete', mention: '💬 Mention',
+  };
+  const owner = card.assignees[0] ? nameOfUser(card.assignees[0]) : '';
+  const fields = [];
+  if (owner) fields.push({ name: 'Dev', value: owner, inline: true });
+  fields.push({ name: 'By', value: nameOfUser(actor), inline: true });
+  const embed = {
+    title: `${titles[event]} · #${card.id} ${card.title}`.slice(0, 250),
+    url: PUBLIC_URL ? `${PUBLIC_URL}/#card-${card.id}` : undefined,
+    description: String(text).slice(0, 1500) || undefined,
+    color: COLORS[event], fields,
+  };
+  fetch(DISCORD_WEBHOOK_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+    signal: AbortSignal.timeout(5000),
+  }).catch((e) => console.error('Discord notify failed:', e.message));
+}
+// "@name", "@email-prefix" or "@full@email" in a comment -> list of registered user emails
+function findMentions(text) {
+  const out = new Set();
+  for (const m of text.matchAll(/@([\p{L}\p{N}_.\-@]+)/gu)) {
+    const tok = m[1].replace(/[.\-]+$/, '').toLowerCase();
+    for (const u of db.users) {
+      if (u.email === tok || u.email.split('@')[0] === tok || u.name.toLowerCase().replace(/\s+/g, '') === tok) out.add(u.email);
+    }
+  }
+  return [...out];
+}
+const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d));
+const cleanTags = (t) => (Array.isArray(t) ? t : String(t || '').split(',')).map((x) => clean(x, 30)).filter(Boolean).slice(0, 8);
+function descendants(id) { // all sub-card ids under a card
+  const out = new Set(); const stack = [id];
+  while (stack.length) { const cur = stack.pop(); for (const c of db.cards) if (c.parent === cur && !out.has(c.id)) { out.add(c.id); stack.push(c.id); } }
+  return out;
+}
+// binary storage for attachments (Postgres bytea, or ./data/uploads in file mode)
+async function putFile(id, cardId, mime, buf) {
+  if (pool) return pool.query('INSERT INTO devboard_files (id, card_id, mime, data) VALUES ($1,$2,$3,$4)', [id, cardId, mime, buf]);
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true }); fs.writeFileSync(path.join(UPLOAD_DIR, id), buf);
+}
+async function getFile(id) {
+  if (pool) { const r = await pool.query('SELECT data FROM devboard_files WHERE id = $1', [id]); return r.rows[0]?.data || null; }
+  try { return fs.readFileSync(path.join(UPLOAD_DIR, id)); } catch { return null; }
+}
+async function delFile(id) {
+  if (pool) return pool.query('DELETE FROM devboard_files WHERE id = $1', [id]);
+  try { fs.unlinkSync(path.join(UPLOAD_DIR, id)); } catch { /* already gone */ }
+}
+function readRaw(req, max) {
+  return new Promise((resolve, reject) => {
+    const chunks = []; let n = 0;
+    req.on('data', (c) => { n += c.length; if (n > max) { reject(new HttpError(413, `File too large (max ${Math.round(max / 1e6)} MB)`)); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 const now = () => new Date().toISOString();
 const log = (card, user, action, text = '') => {
   card.history.push({ at: now(), user: user || 'unknown', action, text });
@@ -121,7 +198,8 @@ const find = (id) => {
 async function api(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // drop "api"
   const method = req.method;
-  const body = method === 'GET' ? {} : await readBody(req);
+  const isUpload = parts[0] === 'cards' && parts[2] === 'files' && method === 'POST';
+  const body = method === 'GET' || isUpload ? {} : await readBody(req);
 
   // ---- auth (no session needed) ----
   const startSession = async (email) => {
@@ -208,6 +286,25 @@ async function api(req, res, url) {
     throw new HttpError(405, 'Method not allowed');
   }
 
+  // ---- attachments: download ----
+  if (parts[0] === 'files' && parts.length === 2 && method === 'GET') {
+    const f = db.cards.flatMap((c) => c.files).find((x) => x.id === parts[1]);
+    need(f, 404, 'File not found');
+    const buf = await getFile(f.id);
+    need(buf, 404, 'File not found');
+    const headers = { 'Content-Type': f.mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' };
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (m && (m[1] || m[2])) { // Range support so videos can seek
+      const start = m[1] ? Number(m[1]) : Math.max(0, buf.length - Number(m[2]));
+      const end = m[1] && m[2] ? Math.min(Number(m[2]), buf.length - 1) : buf.length - 1;
+      if (start > end || start >= buf.length) { res.writeHead(416, { 'Content-Range': `bytes */${buf.length}` }); return res.end(); }
+      res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${buf.length}`, 'Content-Length': end - start + 1 });
+      return res.end(buf.subarray(start, end + 1));
+    }
+    res.writeHead(200, { ...headers, 'Content-Length': buf.length });
+    return res.end(buf);
+  }
+
   // ---- cards ----
   if (parts[0] === 'cards' && parts.length === 1 && method === 'GET') {
     let list = db.cards;
@@ -223,12 +320,15 @@ async function api(req, res, url) {
     need(title, 400, 'title required');
     const type = TYPES.includes(body.type) ? body.type : 'task';
     const priority = PRIORITIES.includes(body.priority) ? body.priority : 'medium';
-    const tags = (Array.isArray(body.tags) ? body.tags : String(body.tags || '').split(','))
-      .map((t) => clean(t, 30)).filter(Boolean).slice(0, 8);
+    const tags = cleanTags(body.tags);
+    const due = isDate(clean(body.due, 10)) ? clean(body.due, 10) : '';
+    const parentId = body.parent ? Number(body.parent) : null;
+    need(parentId === null || db.cards.some((c) => c.id === parentId), 400, `Parent card #${parentId} not found`);
     const card = {
       id: ++db.seq, type, title, description: clean(body.description), priority, tags,
+      due, milestone: clean(body.milestone, 40), parent: parentId, related: [], files: [],
       reporter: user, status: 'open', assignees: [],
-      dev_summary: '', test_steps: [], comments: [], history: [],
+      dev_summary: '', test_steps: [], test_checks: [], comments: [], history: [],
       created_at: now(), updated_at: now(),
     };
     log(card, user, 'created');
@@ -244,16 +344,40 @@ async function api(req, res, url) {
   if (!action && method === 'GET') return sendJson(res, 200, card);
   if (!action && method === 'DELETE') {
     forbid(me, 'admin');
+    for (const f of card.files) await delFile(f.id);
+    for (const c of db.cards) { c.related = c.related.filter((r) => r !== card.id); if (c.parent === card.id) c.parent = card.parent; }
     db.cards = db.cards.filter((c) => c.id !== card.id);
     await save();
     return sendJson(res, 200, { ok: true });
   }
   if (!action && method === 'PATCH') {
-    need(can(me, 'admin') || card.reporter === user, 403, 'Only the reporter or an admin can edit');
-    for (const k of ['title', 'description']) if (body[k] !== undefined) card[k] = clean(body[k], k === 'title' ? 200 : 5000);
+    need(can(me, 'admin') || card.reporter === user || card.assignees.includes(user), 403, 'Only the reporter, the owner or an admin can edit');
+    if (body.title !== undefined) { const t = clean(body.title, 200); need(t, 400, 'title required'); card.title = t; }
+    if (body.description !== undefined) card.description = clean(body.description);
     if (PRIORITIES.includes(body.priority)) card.priority = body.priority;
     if (TYPES.includes(body.type)) card.type = body.type;
+    if (body.tags !== undefined) card.tags = cleanTags(body.tags);
+    if (body.due !== undefined) { const d = clean(body.due, 10); need(d === '' || isDate(d), 400, 'Invalid date'); card.due = d; }
+    if (body.milestone !== undefined) card.milestone = clean(body.milestone, 40);
+    if (body.parent !== undefined) {
+      const pid = body.parent ? Number(body.parent) : null;
+      if (pid !== null) {
+        need(db.cards.some((c) => c.id === pid), 400, `Card #${pid} not found`);
+        need(pid !== card.id && !descendants(card.id).has(pid), 400, 'A card cannot be its own parent or sub-card');
+      }
+      card.parent = pid;
+    }
     log(card, user, 'edited');
+    await save();
+    return sendJson(res, 200, card);
+  }
+  if (action === 'files' && parts[3] && method === 'DELETE') {
+    const f = card.files.find((x) => x.id === parts[3]);
+    need(f, 404, 'File not found');
+    need(can(me, 'admin') || f.by === user, 403, 'Only the uploader or an admin can remove a file');
+    card.files = card.files.filter((x) => x !== f);
+    await delFile(f.id);
+    log(card, user, 'file_removed', f.name);
     await save();
     return sendJson(res, 200, card);
   }
@@ -278,6 +402,41 @@ async function api(req, res, url) {
       log(card, user, 'unclaimed');
       break;
     }
+    case 'files': { // upload one attachment: raw body, Content-Type = mime, X-Filename = url-encoded name
+      const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      need(FILE_TYPES[mime], 415, 'Only PNG/JPEG/GIF/WebP images and MP4/WebM videos are allowed');
+      need(card.files.length < MAX_FILES_PER_CARD, 409, `Max ${MAX_FILES_PER_CARD} files per card`);
+      const buf = await readRaw(req, FILE_TYPES[mime]);
+      need(buf.length > 0, 400, 'Empty file');
+      const id = crypto.randomBytes(12).toString('hex');
+      let name = 'file'; try { name = decodeURIComponent(String(req.headers['x-filename'] || 'file')); } catch { /* keep default */ }
+      await putFile(id, card.id, mime, buf);
+      card.files.push({ id, name: clean(name.replace(/[\\/]/g, '_'), 80), mime, size: buf.length, by: user, at: now() });
+      log(card, user, 'file_added', card.files.at(-1).name);
+      break;
+    }
+    case 'link': case 'unlink': { // "related" links are two-way
+      const other = db.cards.find((c) => c.id === Number(body.id));
+      need(other && other.id !== card.id, 400, 'Card not found');
+      if (action === 'link') {
+        if (!card.related.includes(other.id)) card.related.push(other.id);
+        if (!other.related.includes(card.id)) other.related.push(card.id);
+      } else {
+        card.related = card.related.filter((r) => r !== other.id);
+        other.related = other.related.filter((r) => r !== card.id);
+      }
+      log(card, user, action === 'link' ? 'linked' : 'unlinked', `#${other.id}`);
+      break;
+    }
+    case 'check': { // tester ticks one test step
+      forbid(me, 'tester', 'admin');
+      need(card.status === 'ready_to_test', 409, 'Card is not ready to test');
+      const i = Number(body.index);
+      need(Number.isInteger(i) && i >= 0 && i < card.test_steps.length, 400, 'Bad step');
+      card.test_checks[i] = !!body.checked;
+      card.updated_at = now();
+      break;
+    }
     case 'ready': { // Dev/Claude: fix done, ready for tester
       forbid(me, 'dev', 'admin');
       need(card.assignees.includes(user) || can(me, 'admin'), 403, 'Only an assignee can mark this ready');
@@ -286,16 +445,20 @@ async function api(req, res, url) {
       need(steps.length > 0, 400, 'test_steps required (at least one step)');
       card.dev_summary = clean(body.summary);
       card.test_steps = steps;
+      card.test_checks = steps.map(() => false);
       card.status = 'ready_to_test';
       log(card, user, 'ready_to_test', card.dev_summary);
+      notify('ready_to_test', card, user, card.dev_summary);
       break;
     }
     case 'pass': { // Tester: passed -> complete
       forbid(me, 'tester', 'admin');
       need(card.status === 'ready_to_test', 409, 'Card is not ready to test');
+      need(card.test_checks.length === card.test_steps.length && card.test_checks.every(Boolean), 409, 'Tick every test step before passing');
       card.status = 'complete';
       card.completed_by = user;
       log(card, user, 'complete', clean(body.text));
+      notify('complete', card, user);
       break;
     }
     case 'fail': { // Tester: send back to dev
@@ -306,6 +469,7 @@ async function api(req, res, url) {
       card.status = 'in_progress';
       card.comments.push({ at: now(), user, text: `❌ Test failed: ${reason}` });
       log(card, user, 'test_failed', reason);
+      notify('test_failed', card, user, reason);
       break;
     }
     case 'reopen': {
@@ -317,8 +481,10 @@ async function api(req, res, url) {
     case 'comment': {
       const text = clean(body.text);
       need(text, 400, 'text required');
-      card.comments.push({ at: now(), user, text });
+      const mentions = findMentions(text);
+      card.comments.push({ at: now(), user, text, mentions });
       log(card, user, 'commented');
+      if (mentions.length) notify('mention', card, user, `${mentions.map((e) => '@' + nameOfUser(e)).join(' ')}: ${text}`);
       break;
     }
     default: throw new HttpError(404, 'Unknown action');

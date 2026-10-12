@@ -15,3 +15,5 @@ services:
         value: temgoodboi@gmail.com
       - key: DATABASE_URL   # Neon/Supabase Postgres connection string; paste it in the Render dashboard
         sync: false
+      - key: DISCORD_WEBHOOK_URL   # optional: Discord channel webhook for ready/fail/mention alerts
+        sync: false

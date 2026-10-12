@@ -43,3 +43,15 @@ Token ส่วนตัวสำหรับ MCP ดูได้ที่เม
 4. เอา URL ที่ Render ให้ (https://devboard-xxxx.onrender.com) ไปเพิ่มใน Google OAuth → Authorized JavaScript origins
 ถ้าไม่ตั้ง `DATABASE_URL` จะเก็บข้อมูลเป็นไฟล์ `data/db.json` (เหมาะกับรันในเครื่อง)
 หมายเหตุ: Render Free จะหลับเมื่อไม่มีคนใช้ ~15 นาที เปิดครั้งแรกอาจรอ ~30-60 วินาที
+
+## Discord แจ้งเตือน (ไม่บังคับ)
+1. ใน Discord: ตั้งค่าช่อง → Integrations → Webhooks → New Webhook → Copy Webhook URL
+2. ตั้ง env `DISCORD_WEBHOOK_URL` (บน Render: Environment) แล้ว redeploy
+3. ระบบจะส่งข้อความเมื่อ: พร้อมเทส / เทสไม่ผ่าน / เสร็จสิ้น / มีการ @แท็กคนในคอมเมนต์ พร้อมลิงก์เปิดการ์ด
+   (ลิงก์ใช้ `PUBLIC_URL` หรือ `RENDER_EXTERNAL_URL` ที่ Render ตั้งให้อยู่แล้ว)
+
+## ไฟล์แนบ
+รูป PNG/JPEG/GIF/WebP (≤ 6-8 MB, รูปใหญ่ถูกย่อในเบราว์เซอร์อัตโนมัติ) และวิดีโอ MP4/WebM (≤ 12 MB) สูงสุด 8 ไฟล์ต่อการ์ด
+เก็บใน Postgres (ตาราง `devboard_files`) เมื่อมี `DATABASE_URL` มิฉะนั้นเก็บใน `data/uploads/`
+ระวัง: Neon แผนฟรีมีพื้นที่ ~0.5 GB รวมทุกอย่าง ถ้าแนบวิดีโอเยอะให้ย้ายไปที่เก็บไฟล์แยก (เช่น Cloudflare R2)
+Claude ดูรูปแนบได้ผ่านเครื่องมือ `get_attachment` (วิดีโอดูไม่ได้)
