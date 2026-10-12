@@ -62,11 +62,14 @@ server.registerTool('get_card', {
 }, wrap(({ id }) => call('GET', `/cards/${id}`)));
 
 server.registerTool('claim_cards', {
-  description: 'Mark one or more cards as "I will do this" for the current dev (moves open -> in_progress).',
+  description: 'Mark one or more cards as "I will do this" for the current dev (moves open -> in_progress). A card can have only one owner: cards already claimed by someone else come back with an error and are skipped.',
   inputSchema: { ids: z.array(z.number().int()).min(1) },
 }, wrap(async ({ ids }) => {
   const out = [];
-  for (const id of ids) out.push(brief(await call('POST', `/cards/${id}/claim`, {})));
+  for (const id of ids) {
+    try { out.push(brief(await call('POST', `/cards/${id}/claim`, {}))); }
+    catch (e) { out.push({ id, error: e.message }); } // e.g. "Already claimed by Smart": report, keep going
+  }
   return out;
 }));
 

@@ -62,7 +62,19 @@ main{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:14px;pad
 .chk input:checked{background:var(--accent);border-color:var(--accent)}
 .chk input:checked::after{content:"";width:8px;height:4px;border:2px solid #0b0d14;border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
 .chk input:disabled{opacity:.5;cursor:wait}
-.card.mine{border-color:#3b4270}
+.card.mine{border-color:#3b4270;background:#1d2133}
+.card.locked{opacity:.88}
+.lock{display:grid;place-content:center;width:16px;height:16px;color:var(--mute);margin-right:2px}
+.lock svg{width:14px;height:14px}
+.av{display:inline-grid;place-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:600;color:#fff;flex:none}
+.av.lg{width:32px;height:32px;font-size:14px}
+.claim{display:flex;align-items:center;gap:7px;margin-top:8px;padding:5px 8px;border-radius:8px;background:var(--bg);border:1px solid var(--line);font-size:12px;color:var(--mute)}
+.claim b{color:var(--text);font-weight:500}
+.claim.me{border-color:#3b4270;background:#171a2b}.claim.me b{color:var(--accent)}
+.banner{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.banner.me{border-color:#3b4270;background:#171a2b}
+.banner .who{flex:1}.banner .who small{display:block;color:var(--mute);font-size:11px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a1517;border:1px solid #6b2f35;color:#ffd7da;padding:10px 16px;border-radius:10px;z-index:99;display:none;max-width:90vw}
 .btn.danger{color:var(--bad);border-color:#4a2a2e}.btn.danger:hover{background:#2a1517}
 .empty{color:var(--mute);font-size:12px;text-align:center;padding:16px}
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:0;width:min(640px,94vw);max-height:90vh}
@@ -101,6 +113,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
   <div id="userBox" class="userbox"></div>
 </header>
 <main id="board"></main>
+<div id="toast"></div>
 
 <dialog id="newDlg"><form class="dlg" method="dialog" id="newForm">
   <h3 data-i18n="newcard"></h3>
@@ -162,7 +175,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>คลิกชื่อมุมขวาบน → <b>เชื่อมต่อ Claude (MCP)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/geckogamedev</code> เป็นที่อยู่จริง)</li>
       <li>Token เป็นของคุณคนเดียว ห้ามแชร์</li></ol>
       <b>ทุกครั้งที่ทำงาน</b><ol>
-      <li><b>ติ๊กช่องสี่เหลี่ยมที่การ์ดบนหน้าหลัก</b> เพื่อรับงาน (การ์ดย้ายไปกำลังทำ) เลือกได้หลายใบ ติ๊กออกเพื่อปล่อยการ์ด (หรือเปิดการ์ดแล้วกด <b>✋ ฉันจะทำงานนี้</b> ก็ได้)</li>
+      <li><b>ติ๊กช่องสี่เหลี่ยมที่การ์ดบนหน้าหลัก</b> เพื่อรับงาน (การ์ดย้ายไปกำลังทำ) เลือกได้หลายใบ แต่ <b>การ์ด 1 ใบมีคนรับได้ 1 คน</b> ถ้ามีคนรับไปแล้วจะขึ้นรูปกุญแจและชื่อคนที่รับ ติ๊กออกเพื่อปล่อยการ์ด (หรือเปิดการ์ดแล้วกด <b>✋ ฉันจะทำงานนี้</b> ก็ได้)</li>
       <li>เปิด Claude Code <b>ในโฟลเดอร์โค้ดเกม</b> แล้วพิมพ์ เช่น
         <ul><li><code>ทำการ์ด GeckoBoard ที่ฉันรับไว้ทั้งหมด</code> (หลายใบ)</li><li><code>ทำการ์ด #12 ให้หน่อย</code> (ใบเดียว)</li></ul></li>
       <li>Claude จะอ่านการ์ด แก้โค้ด แล้วย้ายการ์ดไป <b>พร้อมเทส</b> พร้อมสรุปและวิธีเทสให้ Tester</li>
@@ -179,6 +192,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>คลิกชื่อมุมขวาบน → <b>ทีมและสิทธิ์</b></li>
       <li>เพิ่มคนใหม่ด้วยอีเมล Google + เลือก role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
       <li>คนที่ไม่อยู่ในรายชื่อจะ login ไม่ได้ เปลี่ยน role หรือลบคนออกได้ในหน้าเดียวกัน</li>
+      <li>ถ้าคนรับงานไปแล้วทำไม่ได้ เปิดการ์ดแล้วกด <b>ปล่อยการ์ดจาก …</b> เพื่อดึงคืน</li>
       <li>ลบการ์ด: เปิดการ์ด แล้วกด <b>🗑 ลบการ์ด</b> (เฉพาะ admin ลบแล้วกู้คืนไม่ได้)</li></ol></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
       <li><b>dev</b>: รับ/ปล่อยการ์ด ส่งพร้อมเทส (ผ่าน Claude)</li>
@@ -199,7 +213,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>Click your name (top right) → <b>Connect Claude (MCP)</b> and run the copied command in a terminal (replace <code>/path/to/geckogamedev</code> with the real path)</li>
       <li>The token is personal. Never share it</li></ol>
       <b>Every time you work</b><ol>
-      <li><b>Tick the checkbox on a card on the main board</b> to claim it (it moves to In Progress). Take as many as you like; untick to release (or open the card and click <b>✋ I'll do this</b>)</li>
+      <li><b>Tick the checkbox on a card on the main board</b> to claim it (it moves to In Progress). Take as many as you like, but <b>each card can have only one owner</b>: a card someone already took shows a lock and their name. Untick to release (or open the card and click <b>✋ I'll do this</b>)</li>
       <li>Open Claude Code <b>inside the game's code folder</b> and type, for example
         <ul><li><code>Do all the GeckoBoard cards I claimed</code> (multiple)</li><li><code>Do GeckoBoard card #12</code> (single)</li></ul></li>
       <li>Claude reads the card, fixes the code, then moves it to <b>Ready to Test</b> with a summary and test steps for the tester</li>
@@ -216,6 +230,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
       <li>Click your name (top right) → <b>Team &amp; roles</b></li>
       <li>Add people by Google email and choose a role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
       <li>People not on the list can't sign in. Change roles or remove people on the same screen</li>
+      <li>If the owner can't finish, open the card and click <b>Release from …</b> to take it back</li>
       <li>Delete a card: open it and click <b>🗑 Delete</b> (admin only, cannot be undone)</li></ol></details>
     <details><summary>What can each role do?</summary><ul>
       <li><b>dev</b>: claim/release cards, send to Ready to Test (via Claude)</li>
@@ -241,7 +256,7 @@ en:{all:'All',tickets:'Tickets',tasks:'Tasks',everyone:'Everyone',mine:'Mine',un
  help_title:'How to use GeckoBoard',menu_token:'Connect Claude (MCP)',menu_team:'Team & roles',menu_out:'Sign out',
  claim:"✋ I'll do this",release:'Release',pass:'✓ Pass → Complete',fail:'✗ Fail → back to dev',reopen:'Reopen',
  by:'by',noassignee:'Unassigned',howtest:'🧪 How to test',comments:'Comments',nocomments:'No comments',writecomment:'Write a comment…',send:'Send',history:'History',
- failprompt:'Why did the test fail?',tick_tip:'Tick = I will do this',delete:'Delete',confirm_delete:'Delete card #{0} "{1}"? This cannot be undone.',noGoogle:'Google sign-in is not configured on the server.',googleFail:'Could not load Google sign-in',
+ failprompt:'Why did the test fail?',tick_tip:'Tick = I will do this',claimed_by:'Claimed by {0}',you:'You',working:'working on this',did_it:'did this',release_other:'Release from {0}',confirm_release_other:'Take this card away from {0}?',already:'Already claimed by {0}. Pick another card.',delete:'Delete',confirm_delete:'Delete card #{0} "{1}"? This cannot be undone.',noGoogle:'Google sign-in is not configured on the server.',googleFail:'Could not load Google sign-in',
  a_created:'created',a_claimed:'claimed',a_unclaimed:'released',a_ready_to_test:'marked ready to test',a_complete:'passed (complete)',a_test_failed:'test failed',a_reopened:'reopened',a_commented:'commented',a_edited:'edited'},
 th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุกคน',mine:'ของฉัน',unassigned:'ยังไม่มีคนรับ',help:'? วิธีใช้',new:'+ สร้างการ์ด',
  s_open:'เปิด',s_in_progress:'กำลังทำ',s_ready_to_test:'พร้อมเทส',s_complete:'เสร็จสิ้น',
@@ -254,7 +269,7 @@ th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุ
  help_title:'วิธีใช้ GeckoBoard',menu_token:'เชื่อมต่อ Claude (MCP)',menu_team:'ทีมและสิทธิ์',menu_out:'ออกจากระบบ',
  claim:'✋ ฉันจะทำงานนี้',release:'ปล่อยการ์ด',pass:'✓ ผ่าน → เสร็จสิ้น',fail:'✗ ไม่ผ่าน → ส่งกลับให้ Dev',reopen:'เปิดใหม่',
  by:'โดย',noassignee:'ยังไม่มีคนรับ',howtest:'🧪 วิธีเทส',comments:'ความคิดเห็น',nocomments:'ยังไม่มีความคิดเห็น',writecomment:'เขียนความคิดเห็น…',send:'ส่ง',history:'ประวัติ',
- failprompt:'ทำไมเทสไม่ผ่าน?',tick_tip:'ติ๊ก = ฉันจะทำงานนี้',delete:'ลบการ์ด',confirm_delete:'ลบการ์ด #{0} "{1}" ใช่ไหม? ลบแล้วกู้คืนไม่ได้',noGoogle:'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google sign-in',googleFail:'โหลด Google sign-in ไม่สำเร็จ',
+ failprompt:'ทำไมเทสไม่ผ่าน?',tick_tip:'ติ๊ก = ฉันจะทำงานนี้',claimed_by:'ถูกรับโดย {0}',you:'คุณ',working:'กำลังทำงานนี้',did_it:'เป็นคนทำ',release_other:'ปล่อยการ์ดจาก {0}',confirm_release_other:'ดึงการ์ดนี้คืนจาก {0} ใช่ไหม?',already:'{0} รับการ์ดนี้ไปแล้ว กรุณาเลือกใบอื่น',delete:'ลบการ์ด',confirm_delete:'ลบการ์ด #{0} "{1}" ใช่ไหม? ลบแล้วกู้คืนไม่ได้',noGoogle:'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google sign-in',googleFail:'โหลด Google sign-in ไม่สำเร็จ',
  a_created:'สร้างการ์ด',a_claimed:'รับงาน',a_unclaimed:'ปล่อยการ์ด',a_ready_to_test:'ส่งพร้อมเทส',a_complete:'เทสผ่าน (เสร็จสิ้น)',a_test_failed:'เทสไม่ผ่าน',a_reopened:'เปิดใหม่',a_commented:'คอมเมนต์',a_edited:'แก้ไข'}
 };
 let lang='en';
@@ -268,6 +283,10 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nameOf=e=>users.find(u=>u.email===e)?.name||e;
 const role=(...r)=>user&&r.includes(user.role);
+const hue=e=>{let h=0;for(const ch of String(e))h=(h*31+ch.charCodeAt(0))%360;return h};
+const avatar=(e,cls='')=>`<span class="av ${cls}" style="background:hsl(${hue(e)} 45% 40%)">${esc([...nameOf(e)][0]?.toUpperCase()||'?')}</span>`;
+let toastT;const toast=m=>{const el=$('#toast');el.textContent=m;el.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>el.style.display='none',3500)};
+const LOCK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 const locale=()=>lang==='th'?'th-TH':'en-GB';
 
 function applyLang(){
@@ -286,7 +305,7 @@ document.querySelectorAll('#langSeg button,[data-langseg] button').forEach(b=>b.
 
 async function api(method,path,body){
   const r=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
-  const d=await r.json(); if(r.status===401&&path!=='/login'){showLogin()} if(!r.ok) throw new Error(d.error||r.status); return d;
+  const d=await r.json(); if(r.status===401&&path!=='/login'){showLogin()} if(!r.ok){const er=new Error(d.error||r.status);er.data=d;throw er} return d;
 }
 async function load(){ if(!user)return; try{[cards,users]=await Promise.all([api('GET','/cards'),api('GET','/users')]);render(); if(openId&&$('#viewDlg').open) showCard(openId,true)}catch(e){console.error(e)} }
 
@@ -353,23 +372,29 @@ function render(){
   }).join('');
 }
 function cardHtml(c){
+  const owner=c.assignees[0], mine=!!user&&c.assignees.includes(user.email);
+  const lockedByOther=!!owner&&!mine;
   const canTick=role('dev','admin')&&c.status!=='complete'&&c.status!=='ready_to_test';
-  const mine=!!user&&c.assignees.includes(user.email);
-  const chk=canTick?`<label class="chk" title="${t('tick_tip')}"><input type="checkbox" data-claim="${c.id}" ${mine?'checked':''}></label>`:'';
-  return `<div class="card${mine?' mine':''}" data-id="${c.id}">
-    <div class="row">${chk}<span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
+  let ctl='';
+  if(canTick&&!lockedByOther) ctl=`<label class="chk" title="${t('tick_tip')}"><input type="checkbox" data-claim="${c.id}" ${mine?'checked':''}></label>`;
+  else if(lockedByOther&&canTick) ctl=`<span class="lock" title="${esc(t('claimed_by',nameOf(owner)))}">${LOCK}</span>`;
+  const claim=owner?`<div class="claim${mine?' me':''}">${avatar(owner)}<span>${mine?`<b>${t('you')}</b>`:`<b>${esc(nameOf(owner))}</b>`} · ${t(c.status==='complete'?'did_it':'working')}</span></div>`:'';
+  return `<div class="card${mine?' mine':''}${lockedByOther?' locked':''}" data-id="${c.id}">
+    <div class="row">${ctl}<span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
     <span class="meta pri-${c.priority}" style="margin-left:auto">${t('pri_'+c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>
-    <div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}
-    ${c.assignees.map(a=>`<span class="avatar">@${esc(nameOf(a))}</span>`).join('')}</div></div>`;
+    ${c.tags.length?`<div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>`:''}
+    ${claim}</div>`;
 }
 
 function showCard(id,keep){
   const c=cards.find(x=>x.id===id); if(!c)return;
   openId=id; const mine=c.assignees.includes(user.email);
-  const acts=[];
+  const acts=[]; const owner=c.assignees[0];
   if(c.status!=='complete'&&role('dev','admin')){
-    acts.push(mine?`<button class="btn" data-a="unclaim">${t('release')}</button>`:`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
+    if(mine) acts.push(`<button class="btn" data-a="unclaim">${t('release')}</button>`);
+    else if(!owner) acts.push(`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
+    else if(role('admin')) acts.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other',nameOf(owner))}</button>`);
   }
   if(c.status==='ready_to_test'&&role('tester','admin')) acts.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
   if(c.status==='complete'&&role('tester','admin')) acts.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
@@ -378,7 +403,9 @@ function showCard(id,keep){
     <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id} · ${t('by')} ${esc(nameOf(c.reporter))} · <span class="pri-${c.priority}">${t('pri_'+c.priority)}</span></span>
       <span class="status" style="margin-left:auto;color:var(${COLOR[c.status]});border:1px solid var(${COLOR[c.status]})">${t('s_'+c.status)}</span></div>
     <h3>${esc(c.title)}</h3>
-    <div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}${c.assignees.map(a=>`<span class="avatar">@${esc(nameOf(a))}</span>`).join('')||`<span class="meta">${t('noassignee')}</span>`}</div>
+    ${c.tags.length?`<div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div>`:''}
+    <div class="banner${mine?' me':''}">${owner?avatar(owner,'lg'):`<span class="av lg" style="background:var(--line);color:var(--mute)">?</span>`}
+      <div class="who">${owner?`<b>${mine?t('you'):esc(nameOf(owner))}</b><small>${t(c.status==='complete'?'did_it':'working')}</small>`:`<span class="meta">${t('noassignee')}</span>`}</div></div>
     ${c.description?`<div class="box">${esc(c.description)}</div>`:''}
     ${c.test_steps.length?`<div class="sec"><h4>${t('howtest')}</h4>
       ${c.dev_summary?`<div class="box testbox" style="margin-bottom:8px">${esc(c.dev_summary)}</div>`:''}
@@ -394,6 +421,12 @@ function showCard(id,keep){
 }
 async function act(c,a){
   if(a==='close')return $('#viewDlg').close();
+  if(a==='unclaim_other'){
+    const em=$('#viewBody [data-a=unclaim_other]').dataset.email;
+    if(!confirm(t('confirm_release_other',nameOf(em))))return;
+    try{await api('POST',`/cards/${c.id}/unclaim`,{email:em});await load()}catch(e){alert(e.message)}
+    return;
+  }
   if(a==='delete'){
     if(!confirm(t('confirm_delete',c.id,c.title)))return;
     try{await api('DELETE','/cards/'+c.id);$('#viewDlg').close();await load()}catch(e){alert(e.message)}
@@ -404,7 +437,8 @@ async function act(c,a){
     if(a==='comment'){body.text=$('#cmt').value; if(!body.text.trim())return}
     if(a==='fail'){body.text=prompt(t('failprompt')); if(!body.text)return}
     if(a==='pass'){body.text=''}
-    await api('POST',`/cards/${c.id}/${a}`,body); await load();
+    try{await api('POST',`/cards/${c.id}/${a}`,body)}catch(er){await load(); if(er.data?.claimed_by){toast(t('already',nameOf(er.data.claimed_by)));return} throw er}
+    await load();
     if(a==='pass'||a==='fail')$('#viewDlg').close();
   }catch(e){alert(e.message)}
 }
@@ -430,7 +464,8 @@ $('#board').addEventListener('click',async e=>{
   const box=e.target.closest('input[data-claim]');
   if(box){ // tick = "I'll do this", untick = release; never opens the card
     e.stopPropagation(); box.disabled=true;
-    try{await api('POST',`/cards/${box.dataset.claim}/${box.checked?'claim':'unclaim'}`,{})}catch(err){alert(err.message)}
+    try{await api('POST',`/cards/${box.dataset.claim}/${box.checked?'claim':'unclaim'}`,{})}
+    catch(err){ await load(); toast(err.data?.claimed_by?t('already',nameOf(err.data.claimed_by)):err.message) }
     await load(); return;
   }
   if(e.target.closest('.chk'))return;

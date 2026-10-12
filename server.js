@@ -107,8 +107,8 @@ function readBody(req) {
     req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}); } catch (e) { reject(e); } });
   });
 }
-class HttpError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
-const need = (cond, code, msg) => { if (!cond) throw new HttpError(code, msg); };
+class HttpError extends Error { constructor(code, msg, extra) { super(msg); this.code = code; this.extra = extra; } }
+const need = (cond, code, msg, extra) => { if (!cond) throw new HttpError(code, msg, extra); };
 const find = (id) => {
   const c = db.cards.find((x) => x.id === Number(id));
   need(c, 404, `Card #${id} not found`);
@@ -257,6 +257,8 @@ async function api(req, res, url) {
     case 'claim': { // Dev marks "I'll do this"
       forbid(me, 'dev', 'admin');
       need(card.status !== 'complete', 409, 'Card already complete');
+      const other = card.assignees.find((a) => a !== user); // one card, one owner
+      need(!other, 409, `Already claimed by ${db.users.find((u) => u.email === other)?.name || other}`, { claimed_by: other });
       if (!card.assignees.includes(user)) card.assignees.push(user);
       if (card.status === 'open') card.status = 'in_progress';
       log(card, user, 'claimed');
@@ -337,6 +339,6 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) await api(req, res, url);
     else serveStatic(req, res, url);
   } catch (e) {
-    sendJson(res, e.code || 400, { error: e.message });
+    sendJson(res, e.code || 400, { error: e.message, ...e.extra });
   }
 }).listen(PORT, () => console.log(`GeckoBoard running at http://localhost:${PORT}`));
