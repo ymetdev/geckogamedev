@@ -104,23 +104,53 @@ const can = (user, ...roles) => roles.includes(user.role);
 const forbid = (user, ...roles) => need(can(user, ...roles), 403, `Role "${user.role}" is not allowed to do this`);
 
 const nameOfUser = (email) => db.users.find((u) => u.email === email)?.name || email;
-// Discord webhook (fire-and-forget; never blocks or breaks the request)
+// Discord webhook (fire-and-forget; never blocks or breaks the request). Language: DISCORD_LANG=th|en (default th)
+const DLANG = (process.env.DISCORD_LANG || 'th') === 'en' ? 'en' : 'th';
 const COLORS = { ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ade80, mention: 0x7c8cff };
+const DTXT = {
+  en: { ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned',
+    dev: 'Dev', by: 'By', type: 'Type', priority: 'Priority', due: 'Due', ms: 'Milestone', tags: 'Tags', desc: 'Description', summary: 'What was done', steps: 'How to test',
+    more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
+    st: { open: 'Open', in_progress: 'In Progress', ready_to_test: 'Ready to Test', complete: 'Complete' }, pri: { low: 'low', medium: 'medium', high: 'high', critical: 'critical' } },
+  th: { ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ',
+    dev: 'Dev', by: 'โดย', type: 'ประเภท', priority: 'ความสำคัญ', due: 'กำหนดส่ง', ms: 'Milestone', tags: 'Tag', desc: 'รายละเอียด', summary: 'สิ่งที่ทำ', steps: 'วิธีเทส',
+    more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
+    st: { open: 'เปิด', in_progress: 'กำลังทำ', ready_to_test: 'พร้อมเทส', complete: 'เสร็จสิ้น' }, pri: { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สูง', critical: 'วิกฤต' } },
+}[DLANG];
+const PRI_ICON = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' };
+const cut = (s, n) => { s = String(s || '').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 function notify(event, card, actor, text = '') {
   if (!DISCORD_WEBHOOK_URL) return;
-  const titles = {
-    ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev',
-    complete: '✅ Complete', mention: '💬 Mention',
-  };
-  const owner = card.assignees[0] ? nameOfUser(card.assignees[0]) : '';
-  const fields = [];
-  if (owner) fields.push({ name: 'Dev', value: owner, inline: true });
-  fields.push({ name: 'By', value: nameOfUser(actor), inline: true });
+  const url = PUBLIC_URL ? `${PUBLIC_URL}/#card-${card.id}` : '';
+  const owner = card.assignees[0] ? nameOfUser(card.assignees[0]) : DTXT.unassigned;
+  const fields = [
+    { name: DTXT.type, value: `${card.type === 'ticket' ? '🎫 Ticket' : '📋 Task'}`, inline: true },
+    { name: DTXT.priority, value: `${PRI_ICON[card.priority]} ${DTXT.pri[card.priority]}`, inline: true },
+    { name: DTXT.status, value: DTXT.st[card.status], inline: true },
+    { name: DTXT.dev, value: owner, inline: true },
+    { name: DTXT.by, value: nameOfUser(actor), inline: true },
+  ];
+  if (card.due) fields.push({ name: DTXT.due, value: card.due, inline: true });
+  if (card.milestone) fields.push({ name: DTXT.ms, value: card.milestone, inline: true });
+  if (card.tags.length) fields.push({ name: DTXT.tags, value: card.tags.map((t) => `\`${t}\``).join(' '), inline: false });
+  if (event === 'ready_to_test') {
+    if (card.dev_summary) fields.push({ name: DTXT.summary, value: cut(card.dev_summary, 400), inline: false });
+    const steps = card.test_steps.slice(0, 5).map((x, i) => `${i + 1}. ${cut(x, 120)}`);
+    if (card.test_steps.length > 5) steps.push(DTXT.more.replace('{0}', card.test_steps.length - 5));
+    if (steps.length) fields.push({ name: DTXT.steps, value: steps.join('\n'), inline: false });
+  } else if (event === 'test_failed') {
+    fields.push({ name: DTXT.reason, value: cut(text, 500) || '—', inline: false });
+  } else if (event === 'mention') {
+    fields.push({ name: DTXT.comment, value: cut(text, 500), inline: false });
+  }
+  if (card.description && event !== 'ready_to_test') fields.push({ name: DTXT.desc, value: cut(card.description, 250), inline: false });
+  if (url) fields.push({ name: '\u200b', value: `**[${DTXT.open}](${url})**`, inline: false });
   const embed = {
-    title: `${titles[event]} · #${card.id} ${card.title}`.slice(0, 250),
-    url: PUBLIC_URL ? `${PUBLIC_URL}/#card-${card.id}` : undefined,
-    description: String(text).slice(0, 1500) || undefined,
+    author: { name: DTXT[event] },
+    title: cut(`#${card.id} · ${card.title}`, 250),
+    url: url || undefined,
     color: COLORS[event], fields,
+    footer: { text: 'GeckoBoard' }, timestamp: new Date().toISOString(),
   };
   fetch(DISCORD_WEBHOOK_URL, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -484,7 +514,7 @@ async function api(req, res, url) {
       const mentions = findMentions(text);
       card.comments.push({ at: now(), user, text, mentions });
       log(card, user, 'commented');
-      if (mentions.length) notify('mention', card, user, `${mentions.map((e) => '@' + nameOfUser(e)).join(' ')}: ${text}`);
+      if (mentions.length) notify('mention', card, user, `${mentions.map((e) => '@' + nameOfUser(e)).join(' ')} — ${text}`);
       break;
     }
     default: throw new HttpError(404, 'Unknown action');
