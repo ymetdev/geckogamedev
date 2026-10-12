@@ -33,3 +33,11 @@ Token ส่วนตัวสำหรับ MCP ดูได้ที่เม
 3. เอา Client ID ใส่ env `GOOGLE_CLIENT_ID` ตอนรันเซิร์ฟเวอร์
 เซิร์ฟเวอร์ตรวจ token กับ Google และเช็กว่าอีเมลอยู่ในรายชื่อทีม; ไม่ตั้ง `GOOGLE_CLIENT_ID` = login ไม่ได้
 (ทดสอบในเครื่องโดยไม่มี Google: `ALLOW_INSECURE_EMAIL_LOGIN=1` — ห้ามใช้บน production)
+
+## Deploy บน Render (ฟรี) + Neon Postgres (ฟรี)
+1. สร้างโปรเจกต์ที่ https://neon.tech → copy **connection string** (postgresql://...)
+2. Push repo ขึ้น GitHub → Render: New → Blueprint → เลือก repo (ใช้ `render.yaml`, แผน free)
+3. Render จะถามค่า `DATABASE_URL` → วาง connection string จาก Neon
+4. เอา URL ที่ Render ให้ (https://devboard-xxxx.onrender.com) ไปเพิ่มใน Google OAuth → Authorized JavaScript origins
+ถ้าไม่ตั้ง `DATABASE_URL` จะเก็บข้อมูลเป็นไฟล์ `data/db.json` (เหมาะกับรันในเครื่อง)
+หมายเหตุ: Render Free จะหลับเมื่อไม่มีคนใช้ ~15 นาที เปิดครั้งแรกอาจรอ ~30-60 วินาที

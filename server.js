@@ -1,5 +1,6 @@
 // DevBoard backend: zero-dependency HTTP server + JSON file store.
 import http from 'node:http';
+import pg from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +19,19 @@ export const ROLES = ['admin', 'dev', 'tester'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 let db = { seq: 0, cards: [], users: [], sessions: {} };
-try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
+let writeChain = Promise.resolve();
+// Storage: Postgres when DATABASE_URL is set (Render/Neon), otherwise a local JSON file.
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const pool = DATABASE_URL
+  ? new pg.Pool({ connectionString: DATABASE_URL, max: 3, ssl: /localhost|127\.0\.0\.1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false } })
+  : null;
+if (pool) {
+  await pool.query('CREATE TABLE IF NOT EXISTS devboard_state (id int PRIMARY KEY, data jsonb NOT NULL)');
+  const r = await pool.query('SELECT data FROM devboard_state WHERE id = 1');
+  if (r.rows[0]) db = r.rows[0].data;
+} else {
+  try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
+}
 db.users ||= []; db.sessions ||= {};
 // Seed team from data/users.seed.json (adds missing emails only; later role changes in the UI are kept)
 try {
@@ -33,12 +46,20 @@ if (ADMIN_EMAIL) {
   const u = db.users.find((x) => x.email === ADMIN_EMAIL);
   if (u) u.role = 'admin'; else db.users.push(newUser(ADMIN_EMAIL, ADMIN_EMAIL.split('@')[0], 'admin'));
 }
-save();
+await save();
 function save() {
+  const snapshot = JSON.stringify(db);
+  if (pool) { // serialized so writes land in order; callers await durability
+    const write = writeChain.then(() => pool.query(
+      'INSERT INTO devboard_state (id, data) VALUES (1, $1::jsonb) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data', [snapshot]));
+    writeChain = write.catch(() => {}); // a failed write must not block later ones
+    return write;
+  }
   fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
   const tmp = DB_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
+  fs.writeFileSync(tmp, snapshot);
   fs.renameSync(tmp, DB_FILE);
+  return Promise.resolve();
 }
 
 import crypto from 'node:crypto';
@@ -92,12 +113,12 @@ async function api(req, res, url) {
   const body = method === 'GET' ? {} : await readBody(req);
 
   // ---- auth (no session needed) ----
-  const startSession = (email) => {
+  const startSession = async (email) => {
     const u = db.users.find((x) => x.email === email);
     need(u, 403, `${email} is not registered. Ask an admin to add you.`);
     const sid = crypto.randomBytes(24).toString('hex');
     db.sessions[sid] = email;
-    save();
+    await save();
     const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
     res.setHeader('Set-Cookie', `devboard_session=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`);
     return sendJson(res, 200, { ...publicUser(u), token: u.token });
@@ -113,17 +134,17 @@ async function api(req, res, url) {
     need(r.ok && info.aud === GOOGLE_CLIENT_ID, 401, 'Invalid Google token');
     need(['accounts.google.com', 'https://accounts.google.com'].includes(info.iss), 401, 'Invalid token issuer');
     need(String(info.email_verified) === 'true' && Number(info.exp) * 1000 > Date.now(), 401, 'Google email not verified or token expired');
-    return startSession(String(info.email).toLowerCase());
+    return await startSession(String(info.email).toLowerCase());
   }
   if (parts[0] === 'login' && method === 'POST') {
     need(INSECURE_LOGIN, 403, 'Email-only login is disabled. Use Google sign-in.');
     const email = clean(body.email, 120).toLowerCase();
     need(isEmail(email), 400, 'Enter a valid email');
-    return startSession(email);
+    return await startSession(email);
   }
   if (parts[0] === 'logout' && method === 'POST') {
     delete db.sessions[parseCookies(req).devboard_session];
-    save();
+    await save();
     res.setHeader('Set-Cookie', 'devboard_session=; Path=/; Max-Age=0');
     return sendJson(res, 200, { ok: true });
   }
@@ -145,7 +166,7 @@ async function api(req, res, url) {
       need(ROLES.includes(body.role), 400, 'Invalid role');
       const u = newUser(email, clean(body.name, 60) || email.split('@')[0], body.role);
       db.users.push(u);
-      save();
+      await save();
       return sendJson(res, 201, publicUser(u));
     }
     const u = db.users.find((x) => x.email === email);
@@ -158,14 +179,14 @@ async function api(req, res, url) {
         u.role = body.role;
       }
       if (body.name !== undefined) u.name = clean(body.name, 60) || u.name;
-      save();
+      await save();
       return sendJson(res, 200, publicUser(u));
     }
     if (method === 'DELETE') {
       need(!(u.role === 'admin' && admins.length === 1), 409, 'Cannot remove the last admin');
       db.users = db.users.filter((x) => x !== u);
       for (const [sid, e] of Object.entries(db.sessions)) if (e === email) delete db.sessions[sid];
-      save();
+      await save();
       return sendJson(res, 200, { ok: true });
     }
     throw new HttpError(405, 'Method not allowed');
@@ -196,7 +217,7 @@ async function api(req, res, url) {
     };
     log(card, user, 'created');
     db.cards.push(card);
-    save();
+    await save();
     return sendJson(res, 201, card);
   }
 
@@ -208,7 +229,7 @@ async function api(req, res, url) {
   if (!action && method === 'DELETE') {
     forbid(me, 'admin');
     db.cards = db.cards.filter((c) => c.id !== card.id);
-    save();
+    await save();
     return sendJson(res, 200, { ok: true });
   }
   if (!action && method === 'PATCH') {
@@ -217,7 +238,7 @@ async function api(req, res, url) {
     if (PRIORITIES.includes(body.priority)) card.priority = body.priority;
     if (TYPES.includes(body.type)) card.type = body.type;
     log(card, user, 'edited');
-    save();
+    await save();
     return sendJson(res, 200, card);
   }
 
@@ -284,7 +305,7 @@ async function api(req, res, url) {
     }
     default: throw new HttpError(404, 'Unknown action');
   }
-  save();
+  await save();
   return sendJson(res, 200, card);
 }
 
