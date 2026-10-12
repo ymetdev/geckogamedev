@@ -75,118 +75,205 @@ textarea{min-height:90px;resize:vertical}
 .status{font-size:11px;padding:1px 8px;border-radius:10px;font-weight:600}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 @media(max-width:900px){main{grid-template-columns:repeat(4,260px)}}
+html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
 </style>
 </head>
 <body>
 <header>
   <h1>◆ GeckoBoard</h1>
   <div class="seg" id="typeSeg">
-    <button data-v="" class="on">All</button><button data-v="ticket">Tickets</button><button data-v="task">Tasks</button>
+    <button data-v="" class="on" data-i18n="all"></button><button data-v="ticket" data-i18n="tickets"></button><button data-v="task" data-i18n="tasks"></button>
   </div>
   <div class="seg" id="whoSeg">
-    <button data-v="" class="on">Everyone</button><button data-v="mine">Mine</button><button data-v="unassigned">Unassigned</button>
+    <button data-v="" class="on" data-i18n="everyone"></button><button data-v="mine" data-i18n="mine"></button><button data-v="unassigned" data-i18n="unassigned"></button>
   </div>
   <span class="sp"></span>
-  <button class="btn" id="helpBtn">? วิธีใช้</button>
-  <button class="btn primary" id="newBtn">+ New</button>
+  <div class="seg" id="langSeg" title="Language / ภาษา"><button data-v="th">TH</button><button data-v="en">EN</button></div>
+  <button class="btn" id="helpBtn" data-i18n="help"></button>
+  <button class="btn primary" id="newBtn" data-i18n="new"></button>
   <div id="userBox" class="userbox"></div>
 </header>
 <main id="board"></main>
 
 <dialog id="newDlg"><form class="dlg" method="dialog" id="newForm">
-  <h3>New card</h3>
+  <h3 data-i18n="newcard"></h3>
   <div class="row">
-    <label style="flex:1">Type<select name="type"><option value="ticket">Ticket (bug / request)</option><option value="task">Task</option></select></label>
-    <label style="flex:1">Priority<select name="priority"><option>low</option><option selected>medium</option><option>high</option><option>critical</option></select></label>
+    <label style="flex:1"><span data-i18n="type"></span><select name="type"><option value="ticket" data-i18n="ticket_opt"></option><option value="task" data-i18n="task_opt"></option></select></label>
+    <label style="flex:1"><span data-i18n="priority"></span><select name="priority"><option value="low" data-i18n="pri_low"></option><option value="medium" selected data-i18n="pri_medium"></option><option value="high" data-i18n="pri_high"></option><option value="critical" data-i18n="pri_critical"></option></select></label>
   </div>
-  <label>Title<input name="title" required maxlength="200"></label>
-  <label>Description (steps to reproduce, expected result, etc.)<textarea name="description"></textarea></label>
-  <label>Tags (comma separated, e.g. UI, Combat, Audio)<input name="tags"></label>
-  <div class="actions"><span class="sp"></span><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="ok">Create</button></div>
+  <label><span data-i18n="title"></span><input name="title" required maxlength="200"></label>
+  <label><span data-i18n="desc"></span><textarea name="description"></textarea></label>
+  <label><span data-i18n="tags"></span><input name="tags"></label>
+  <div class="actions"><span class="sp"></span><button class="btn" value="cancel" formnovalidate data-i18n="cancel"></button><button class="btn primary" value="ok" data-i18n="create"></button></div>
 </form></dialog>
 
 <dialog id="loginDlg"><form class="dlg" id="loginForm">
-  <h3>◆ GeckoBoard</h3>
-  <div class="meta">Sign in with your Google account</div>
+  <div class="row"><h3>◆ GeckoBoard</h3><span class="sp"></span>
+    <div class="seg" data-langseg><button type="button" data-v="th">TH</button><button type="button" data-v="en">EN</button></div></div>
+  <div class="meta" data-i18n="signin_google"></div>
   <div id="gbtn" style="min-height:44px"></div>
   <div id="emailLogin" hidden>
-    <label>Dev-only email login<input name="email" type="email" placeholder="you@studio.com"></label>
-    <div class="actions" style="margin-top:8px"><span class="sp"></span><button class="btn primary">Continue</button></div>
+    <label><span data-i18n="dev_login"></span><input name="email" type="email" placeholder="you@studio.com"></label>
+    <div class="actions" style="margin-top:8px"><span class="sp"></span><button class="btn primary" data-i18n="continue"></button></div>
   </div>
   <div class="err" id="loginErr"></div>
 </form></dialog>
 
 <dialog id="teamDlg"><div class="dlg">
-  <h3>Team & roles</h3>
+  <h3 data-i18n="team"></h3>
   <div id="teamList"></div>
   <form class="row" id="addUserForm" style="margin-top:6px">
-    <input name="email" type="email" placeholder="email" required style="flex:2;min-width:140px">
-    <input name="name" placeholder="name" style="flex:1;min-width:90px">
+    <input name="email" type="email" data-i18n-ph="ph_email" required style="flex:2;min-width:140px">
+    <input name="name" data-i18n-ph="ph_name" style="flex:1;min-width:90px">
     <select name="role"><option>dev</option><option>tester</option><option>admin</option></select>
-    <button class="btn primary">Add</button>
+    <button class="btn primary" data-i18n="add"></button>
   </form>
   <div class="err" id="teamErr"></div>
-  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#teamDlg').close()">Close</button></div>
+  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#teamDlg').close()" data-i18n="close"></button></div>
 </div></dialog>
 
 <dialog id="tokenDlg"><div class="dlg">
-  <h3>Connect Claude (MCP)</h3>
-  <div class="meta">Run this in your terminal. The token is personal — don't share it.</div>
+  <h3 data-i18n="token_title"></h3>
+  <div class="meta" data-i18n="token_note"></div>
   <div class="box" id="tokenCmd" style="user-select:all;font-family:monospace;font-size:12px"></div>
-  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#tokenDlg').close()">Close</button></div>
+  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#tokenDlg').close()" data-i18n="close"></button></div>
 </div></dialog>
 
 <dialog id="helpDlg"><div class="dlg">
-  <h3>วิธีใช้ GeckoBoard</h3>
-  <div class="flow"><span>Open</span>→<span style="color:var(--prog)">In Progress</span>→<span style="color:var(--test)">Ready to Test</span>→<span style="color:var(--done)">Complete</span></div>
-  <div class="help">
-    <details open id="h-all"><summary>ทุกคน: สร้างการ์ด</summary><ol>
-      <li>กด <b>+ New</b> เลือก <b>Ticket</b> (บั๊ก/คำขอ) หรือ <b>Task</b> (งานที่ต้องทำ)</li>
-      <li>ใส่ชื่อ รายละเอียด (ขั้นตอนทำซ้ำ ผลที่คาดหวัง) ความสำคัญ และ tag ยิ่งละเอียด Claude ยิ่งแก้ตรงจุด</li>
-      <li>ใช้ปุ่มกรอง <b>Mine / Unassigned</b> เพื่อหางานของตัวเองหรืองานที่ยังไม่มีคนรับ</li></ol></details>
-    <details id="h-dev"><summary>Dev: รับงานแล้วสั่ง Claude</summary>
+  <h3 data-i18n="help_title"></h3>
+  <div class="flow" id="flow"></div>
+
+  <!-- ===== Thai ===== -->
+  <div class="help" data-lang="th">
+    <details data-h="all"><summary>ทุกคน: สร้างการ์ด</summary><ol>
+      <li>กด <b>+ สร้างการ์ด</b> เลือก <b>Ticket</b> (บั๊ก/คำขอ) หรือ <b>Task</b> (งานที่ต้องทำ)</li>
+      <li>ใส่หัวข้อ รายละเอียด (ขั้นตอนทำซ้ำ ผลที่คาดหวัง) ความสำคัญ และ tag ยิ่งละเอียด Claude ยิ่งแก้ตรงจุด</li>
+      <li>ใช้ปุ่มกรอง <b>ของฉัน / ยังไม่มีคนรับ</b> เพื่อหางานของตัวเองหรืองานที่ยังไม่มีคนรับ</li></ol></details>
+    <details data-h="dev"><summary>Dev: รับงานแล้วสั่ง Claude</summary>
       <b>ตั้งค่าครั้งแรก</b><ol>
       <li>Clone โปรเจกต์ GeckoBoard (<code>github.com/ymetdev/geckogamedev</code>) แล้วรัน <code>npm install</code></li>
-      <li>คลิกชื่อมุมขวาบน → <b>Connect Claude (MCP token)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/geckogamedev</code> เป็นที่อยู่จริง)</li>
+      <li>คลิกชื่อมุมขวาบน → <b>เชื่อมต่อ Claude (MCP)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/geckogamedev</code> เป็นที่อยู่จริง)</li>
       <li>Token เป็นของคุณคนเดียว ห้ามแชร์</li></ol>
       <b>ทุกครั้งที่ทำงาน</b><ol>
-      <li>เปิดการ์ด กด <b>✋ I'll do this</b> (การ์ดย้ายไป In Progress) เลือกได้หลายใบ</li>
+      <li>เปิดการ์ด กด <b>✋ ฉันจะทำงานนี้</b> (การ์ดย้ายไปกำลังทำ) เลือกได้หลายใบ</li>
       <li>เปิด Claude Code <b>ในโฟลเดอร์โค้ดเกม</b> แล้วพิมพ์ เช่น
-        <ul><li><code>ทำ card ที่ฉัน mark ไว้ทั้งหมด</code> (หลายใบ)</li><li><code>ทำ #12 ให้หน่อย</code> (ใบเดียว)</li></ul></li>
-      <li>Claude จะอ่านการ์ด แก้โค้ด แล้วย้ายการ์ดไป <b>Ready to Test</b> พร้อมสรุปและวิธีเทสให้ Tester</li>
+        <ul><li><code>ทำการ์ด GeckoBoard ที่ฉันรับไว้ทั้งหมด</code> (หลายใบ)</li><li><code>ทำการ์ด #12 ให้หน่อย</code> (ใบเดียว)</li></ul></li>
+      <li>Claude จะอ่านการ์ด แก้โค้ด แล้วย้ายการ์ดไป <b>พร้อมเทส</b> พร้อมสรุปและวิธีเทสให้ Tester</li>
       <li>ตรวจโค้ดที่ Claude แก้ก่อน commit (Claude ไม่ commit/push เองถ้าไม่สั่ง)</li>
-      <li>ถ้า Tester ตีกลับ ให้สั่งใหม่ เช่น <code>ทำ #12 ใหม่ ดูคอมเมนต์ที่ tester ทิ้งไว้</code></li></ol>
-      <div class="note">ติดงานไม่ไหว? กด <b>Release</b> เพื่อปล่อยการ์ดให้คนอื่นรับ</div></details>
-    <details id="h-tester"><summary>Tester: เทสและปิดงาน</summary><ol>
-      <li>ดูคอลัมน์ <b>Ready to Test</b> แล้วเปิดการ์ด</li>
-      <li>อ่านหัวข้อ <b>🧪 How to test</b> ทำตามขั้นตอนทีละข้อ</li>
-      <li>ผ่านหมด → กด <b>✓ Pass</b> การ์ดไป Complete</li>
-      <li>ไม่ผ่าน → กด <b>✗ Fail</b> พร้อมเหตุผล การ์ดกลับไป In Progress และเหตุผลจะถูกบันทึกเป็นคอมเมนต์</li>
-      <li>ถ้างานที่ปิดไปแล้วมีปัญหากลับมา กด <b>Reopen</b></li></ol></details>
-    <details id="h-admin"><summary>Admin: จัดการทีม</summary><ol>
-      <li>คลิกชื่อมุมขวาบน → <b>Team &amp; roles</b></li>
+      <li>ถ้า Tester ตีกลับ ให้สั่งใหม่ เช่น <code>ทำการ์ด #12 ใหม่ ดูคอมเมนต์ที่ tester ทิ้งไว้</code></li></ol>
+      <div class="note">ติดงานไม่ไหว? กด <b>ปล่อยการ์ด</b> เพื่อให้คนอื่นรับต่อ</div></details>
+    <details data-h="tester"><summary>Tester: เทสและปิดงาน</summary><ol>
+      <li>ดูคอลัมน์ <b>พร้อมเทส</b> แล้วเปิดการ์ด</li>
+      <li>อ่านหัวข้อ <b>🧪 วิธีเทส</b> ทำตามขั้นตอนทีละข้อ</li>
+      <li>ผ่านหมด → กด <b>✓ ผ่าน → เสร็จสิ้น</b></li>
+      <li>ไม่ผ่าน → กด <b>✗ ไม่ผ่าน</b> พร้อมเหตุผล การ์ดกลับไปกำลังทำ และเหตุผลจะถูกบันทึกเป็นคอมเมนต์</li>
+      <li>ถ้างานที่ปิดไปแล้วมีปัญหากลับมา กด <b>เปิดใหม่</b></li></ol></details>
+    <details data-h="admin"><summary>Admin: จัดการทีม</summary><ol>
+      <li>คลิกชื่อมุมขวาบน → <b>ทีมและสิทธิ์</b></li>
       <li>เพิ่มคนใหม่ด้วยอีเมล Google + เลือก role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
       <li>คนที่ไม่อยู่ในรายชื่อจะ login ไม่ได้ เปลี่ยน role หรือลบคนออกได้ในหน้าเดียวกัน</li></ol></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
-      <li><b>dev</b>: รับ/ปล่อยการ์ด ส่ง Ready to Test (ผ่าน Claude)</li>
-      <li><b>tester</b>: Pass / Fail / Reopen</li>
+      <li><b>dev</b>: รับ/ปล่อยการ์ด ส่งพร้อมเทส (ผ่าน Claude)</li>
+      <li><b>tester</b>: ผ่าน / ไม่ผ่าน / เปิดใหม่</li>
       <li><b>admin</b>: ทำได้ทุกอย่าง + จัดการทีม + ลบการ์ด</li>
       <li>ทุก role สร้างการ์ดและคอมเมนต์ได้</li></ul></details>
   </div>
-  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#helpDlg').close()">ปิด</button></div>
+
+  <!-- ===== English ===== -->
+  <div class="help" data-lang="en">
+    <details data-h="all"><summary>Everyone: create a card</summary><ol>
+      <li>Click <b>+ New</b> and pick <b>Ticket</b> (bug / request) or <b>Task</b> (work to do)</li>
+      <li>Add a title, description (steps to reproduce, expected result), priority and tags. The more detail, the better Claude's fix</li>
+      <li>Use the <b>Mine / Unassigned</b> filters to find your own cards or cards nobody has picked up</li></ol></details>
+    <details data-h="dev"><summary>Dev: pick up work and ask Claude</summary>
+      <b>First-time setup</b><ol>
+      <li>Clone the GeckoBoard project (<code>github.com/ymetdev/geckogamedev</code>) and run <code>npm install</code></li>
+      <li>Click your name (top right) → <b>Connect Claude (MCP)</b> and run the copied command in a terminal (replace <code>/path/to/geckogamedev</code> with the real path)</li>
+      <li>The token is personal. Never share it</li></ol>
+      <b>Every time you work</b><ol>
+      <li>Open a card and click <b>✋ I'll do this</b> (card moves to In Progress). You can take several</li>
+      <li>Open Claude Code <b>inside the game's code folder</b> and type, for example
+        <ul><li><code>Do all the GeckoBoard cards I claimed</code> (multiple)</li><li><code>Do GeckoBoard card #12</code> (single)</li></ul></li>
+      <li>Claude reads the card, fixes the code, then moves it to <b>Ready to Test</b> with a summary and test steps for the tester</li>
+      <li>Review the code Claude changed before committing (Claude won't commit/push unless you ask)</li>
+      <li>If the tester sends it back, ask again, e.g. <code>Redo GeckoBoard card #12, see the tester's comment</code></li></ol>
+      <div class="note">Stuck? Click <b>Release</b> so someone else can take the card</div></details>
+    <details data-h="tester"><summary>Tester: test and close</summary><ol>
+      <li>Look at the <b>Ready to Test</b> column and open a card</li>
+      <li>Read <b>🧪 How to test</b> and follow the steps one by one</li>
+      <li>All good → click <b>✓ Pass → Complete</b></li>
+      <li>Not working → click <b>✗ Fail</b> with a reason. The card goes back to In Progress and the reason is saved as a comment</li>
+      <li>If a closed card turns out to be broken, click <b>Reopen</b></li></ol></details>
+    <details data-h="admin"><summary>Admin: manage the team</summary><ol>
+      <li>Click your name (top right) → <b>Team &amp; roles</b></li>
+      <li>Add people by Google email and choose a role: <b>dev</b> / <b>tester</b> / <b>admin</b></li>
+      <li>People not on the list can't sign in. Change roles or remove people on the same screen</li></ol></details>
+    <details><summary>What can each role do?</summary><ul>
+      <li><b>dev</b>: claim/release cards, send to Ready to Test (via Claude)</li>
+      <li><b>tester</b>: Pass / Fail / Reopen</li>
+      <li><b>admin</b>: everything + manage the team + delete cards</li>
+      <li>Every role can create cards and comment</li></ul></details>
+  </div>
+  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#helpDlg').close()" data-i18n="close"></button></div>
 </div></dialog>
 
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
 
 <script>
-const COLS=[['open','Open','--open'],['in_progress','In Progress','--prog'],['ready_to_test','Ready to Test','--test'],['complete','Complete','--done']];
-const LABEL=Object.fromEntries(COLS.map(c=>[c[0],c[1]]));
-const COLOR=Object.fromEntries(COLS.map(c=>[c[0],c[2]]));
+const I18N={
+en:{all:'All',tickets:'Tickets',tasks:'Tasks',everyone:'Everyone',mine:'Mine',unassigned:'Unassigned',help:'? Guide',new:'+ New',
+ s_open:'Open',s_in_progress:'In Progress',s_ready_to_test:'Ready to Test',s_complete:'Complete',
+ newcard:'New card',type:'Type',ticket_opt:'Ticket (bug / request)',task_opt:'Task',priority:'Priority',
+ pri_low:'low',pri_medium:'medium',pri_high:'high',pri_critical:'critical',
+ title:'Title',desc:'Description (steps to reproduce, expected result, etc.)',tags:'Tags (comma separated, e.g. UI, Combat, Audio)',
+ cancel:'Cancel',create:'Create',signin_google:'Sign in with your Google account',dev_login:'Dev-only email login',continue:'Continue',
+ team:'Team & roles',ph_email:'email',ph_name:'name',add:'Add',close:'Close',remove:'Remove',confirm_remove:'Remove {0}?',
+ token_title:'Connect Claude (MCP)',token_note:'Run this in your terminal. The token is personal. Do not share it.',
+ help_title:'How to use GeckoBoard',menu_token:'Connect Claude (MCP)',menu_team:'Team & roles',menu_out:'Sign out',
+ claim:"✋ I'll do this",release:'Release',pass:'✓ Pass → Complete',fail:'✗ Fail → back to dev',reopen:'Reopen',
+ by:'by',noassignee:'Unassigned',howtest:'🧪 How to test',comments:'Comments',nocomments:'No comments',writecomment:'Write a comment…',send:'Send',history:'History',
+ failprompt:'Why did the test fail?',noGoogle:'Google sign-in is not configured on the server.',googleFail:'Could not load Google sign-in',
+ a_created:'created',a_claimed:'claimed',a_unclaimed:'released',a_ready_to_test:'marked ready to test',a_complete:'passed (complete)',a_test_failed:'test failed',a_reopened:'reopened',a_commented:'commented',a_edited:'edited'},
+th:{all:'ทั้งหมด',tickets:'Tickets',tasks:'Tasks',everyone:'ทุกคน',mine:'ของฉัน',unassigned:'ยังไม่มีคนรับ',help:'? วิธีใช้',new:'+ สร้างการ์ด',
+ s_open:'เปิด',s_in_progress:'กำลังทำ',s_ready_to_test:'พร้อมเทส',s_complete:'เสร็จสิ้น',
+ newcard:'สร้างการ์ดใหม่',type:'ประเภท',ticket_opt:'Ticket (บั๊ก / คำขอ)',task_opt:'Task (งานที่ต้องทำ)',priority:'ความสำคัญ',
+ pri_low:'ต่ำ',pri_medium:'ปานกลาง',pri_high:'สูง',pri_critical:'วิกฤต',
+ title:'หัวข้อ',desc:'รายละเอียด (ขั้นตอนทำซ้ำ ผลที่คาดหวัง ฯลฯ)',tags:'Tag (คั่นด้วยจุลภาค เช่น UI, Combat, Audio)',
+ cancel:'ยกเลิก',create:'สร้าง',signin_google:'ลงชื่อเข้าใช้ด้วยบัญชี Google',dev_login:'เข้าสู่ระบบด้วยอีเมล (สำหรับ dev เท่านั้น)',continue:'ดำเนินการต่อ',
+ team:'ทีมและสิทธิ์',ph_email:'อีเมล',ph_name:'ชื่อ',add:'เพิ่ม',close:'ปิด',remove:'ลบ',confirm_remove:'ลบ {0} ออกจากทีม?',
+ token_title:'เชื่อมต่อ Claude (MCP)',token_note:'รันคำสั่งนี้ใน terminal ของคุณ Token เป็นของคุณคนเดียว ห้ามแชร์',
+ help_title:'วิธีใช้ GeckoBoard',menu_token:'เชื่อมต่อ Claude (MCP)',menu_team:'ทีมและสิทธิ์',menu_out:'ออกจากระบบ',
+ claim:'✋ ฉันจะทำงานนี้',release:'ปล่อยการ์ด',pass:'✓ ผ่าน → เสร็จสิ้น',fail:'✗ ไม่ผ่าน → ส่งกลับให้ Dev',reopen:'เปิดใหม่',
+ by:'โดย',noassignee:'ยังไม่มีคนรับ',howtest:'🧪 วิธีเทส',comments:'ความคิดเห็น',nocomments:'ยังไม่มีความคิดเห็น',writecomment:'เขียนความคิดเห็น…',send:'ส่ง',history:'ประวัติ',
+ failprompt:'ทำไมเทสไม่ผ่าน?',noGoogle:'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า Google sign-in',googleFail:'โหลด Google sign-in ไม่สำเร็จ',
+ a_created:'สร้างการ์ด',a_claimed:'รับงาน',a_unclaimed:'ปล่อยการ์ด',a_ready_to_test:'ส่งพร้อมเทส',a_complete:'เทสผ่าน (เสร็จสิ้น)',a_test_failed:'เทสไม่ผ่าน',a_reopened:'เปิดใหม่',a_commented:'คอมเมนต์',a_edited:'แก้ไข'}
+};
+let lang='en';
+try{lang=localStorage.getItem('geckoboard.lang')||(/^th/i.test(navigator.language)?'th':'en')}catch{}
+const t=(k,...a)=>(I18N[lang][k]??I18N.en[k]??k).replace(/\{(\d)\}/g,(_,i)=>a[i]);
+
+const COLS=[['open','--open'],['in_progress','--prog'],['ready_to_test','--test'],['complete','--done']];
+const COLOR=Object.fromEntries(COLS);
 let cards=[],fType='',fWho='',openId=null,user=null,users=[];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nameOf=e=>users.find(u=>u.email===e)?.name||e;
 const role=(...r)=>user&&r.includes(user.role);
+const locale=()=>lang==='th'?'th-TH':'en-GB';
+
+function applyLang(){
+  document.documentElement.lang=lang;
+  document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>el.placeholder=t(el.dataset.i18nPh));
+  document.querySelectorAll('#langSeg button,[data-langseg] button').forEach(b=>b.classList.toggle('on',b.dataset.v===lang));
+  $('#flow').innerHTML=COLS.map(([k,c],i)=>`${i?'→':''}<span style="color:var(${c})">${t('s_'+k)}</span>`).join('');
+  if(user)renderUserBox();
+  if($('#teamDlg').open)renderTeam();
+  render();
+  if(openId&&$('#viewDlg').open)showCard(openId,true);
+}
+function setLang(l){lang=l;try{localStorage.setItem('geckoboard.lang',l)}catch{};applyLang()}
+document.querySelectorAll('#langSeg button,[data-langseg] button').forEach(b=>b.onclick=()=>setLang(b.dataset.v));
 
 async function api(method,path,body){
   const r=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
@@ -195,16 +282,19 @@ async function api(method,path,body){
 async function load(){ if(!user)return; try{[cards,users]=await Promise.all([api('GET','/cards'),api('GET','/users')]);render(); if(openId&&$('#viewDlg').open) showCard(openId,true)}catch(e){console.error(e)} }
 
 function showLogin(){ user=null; $('#userBox').innerHTML=''; if(!$('#loginDlg').open)$('#loginDlg').showModal(); initLogin() }
-function setUser(u){
-  user=u; $('#loginDlg').close(); if(window.__showHelp){window.__showHelp=false;$('#helpBtn').click()}
+function renderUserBox(){
+  const u=user;
   $('#userBox').innerHTML=`<div class="chip" id="chip"><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
    <div class="menu" id="menu">
-     <button data-m="token">Connect Claude (MCP token)</button>
-     ${u.role==='admin'?'<button data-m="team">Team & roles</button>':''}
-     <button data-m="out">Sign out</button></div>`;
+     <button data-m="token">${t('menu_token')}</button>
+     ${u.role==='admin'?`<button data-m="team">${t('menu_team')}</button>`:''}
+     <button data-m="out">${t('menu_out')}</button></div>`;
   $('#chip').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('show')};
   $('#menu').querySelectorAll('button').forEach(b=>b.onclick=()=>menuAct(b.dataset.m));
-  load();
+}
+function setUser(u){
+  user=u; $('#loginDlg').close(); if(window.__showHelp){window.__showHelp=false;$('#helpBtn').click()}
+  renderUserBox(); load();
 }
 document.addEventListener('click',()=>$('#menu')?.classList.remove('show'));
 async function menuAct(m){
@@ -216,11 +306,11 @@ async function menuAct(m){
 function renderTeam(){
   $('#teamList').innerHTML=users.map(u=>`<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span>
     <select data-e="${esc(u.email)}">${['admin','dev','tester'].map(r=>`<option ${r===u.role?'selected':''}>${r}</option>`).join('')}</select>
-    <button class="btn bad" data-del="${esc(u.email)}">Remove</button></div>`).join('');
+    <button class="btn bad" data-del="${esc(u.email)}">${t('remove')}</button></div>`).join('');
   $('#teamList').querySelectorAll('select').forEach(sel=>sel.onchange=async()=>{
     try{await api('PATCH','/users/'+encodeURIComponent(sel.dataset.e),{role:sel.value});$('#teamErr').textContent='';await load();if(sel.dataset.e===user.email)user.role=sel.value}catch(e){$('#teamErr').textContent=e.message;await load();renderTeam()}});
   $('#teamList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
-    if(!confirm('Remove '+b.dataset.del+'?'))return;
+    if(!confirm(t('confirm_remove',b.dataset.del)))return;
     try{await api('DELETE','/users/'+encodeURIComponent(b.dataset.del));$('#teamErr').textContent='';await load();renderTeam()}catch(e){$('#teamErr').textContent=e.message}});
 }
 $('#addUserForm').addEventListener('submit',async e=>{e.preventDefault();
@@ -229,12 +319,12 @@ let cfg=null;
 async function initLogin(){
   cfg=cfg||await api('GET','/config');
   $('#emailLogin').hidden=!cfg.emailLogin;
-  if(!cfg.googleClientId){ if(!cfg.emailLogin)$('#loginErr').textContent='Google sign-in is not configured on the server.'; return }
-  if(!window.google){ await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)}).catch(()=>{$('#loginErr').textContent='Could not load Google sign-in';}) }
+  if(!cfg.googleClientId){ if(!cfg.emailLogin)$('#loginErr').textContent=t('noGoogle'); return }
+  if(!window.google){ await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)}).catch(()=>{$('#loginErr').textContent=t('googleFail');}) }
   if(!window.google)return;
   google.accounts.id.initialize({client_id:cfg.googleClientId,callback:async r=>{
     try{setUser(await api('POST','/login/google',{credential:r.credential}))}catch(err){$('#loginErr').textContent=err.message}}});
-  $('#gbtn').innerHTML=''; google.accounts.id.renderButton($('#gbtn'),{theme:'filled_black',size:'large',shape:'rectangular'});
+  $('#gbtn').innerHTML=''; google.accounts.id.renderButton($('#gbtn'),{theme:'filled_black',size:'large',shape:'rectangular',locale:lang});
 }
 $('#loginForm').addEventListener('submit',async e=>{e.preventDefault();
   try{setUser(await api('POST','/login',Object.fromEntries(new FormData(e.target))))}catch(err){$('#loginErr').textContent=err.message}});
@@ -242,23 +332,23 @@ $('#loginDlg').addEventListener('cancel',e=>e.preventDefault());
 
 function visible(c){
   if(fType&&c.type!==fType)return false;
-  if(fWho==='mine')return c.assignees.includes(user.email);
+  if(fWho==='mine')return !!user&&c.assignees.includes(user.email);
   if(fWho==='unassigned')return c.assignees.length===0;
   return true;
 }
 function render(){
-  $('#board').innerHTML=COLS.map(([k,name,col])=>{
+  $('#board').innerHTML=COLS.map(([k,col])=>{
     const list=cards.filter(c=>c.status===k&&visible(c)).sort((a,b)=>b.updated_at.localeCompare(a.updated_at));
-    return `<section class="col"><h2><span class="dot" style="background:var(${col})"></span>${name}<span class="count">${list.length}</span></h2>`+
+    return `<section class="col"><h2><span class="dot" style="background:var(${col})"></span>${t('s_'+k)}<span class="count">${list.length}</span></h2>`+
       (list.map(cardHtml).join('')||'<div class="empty">—</div>')+'</section>';
   }).join('');
 }
 function cardHtml(c){
   return `<div class="card" data-id="${c.id}">
     <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id}</span>
-    <span class="meta pri-${c.priority}" style="margin-left:auto">${c.priority}</span></div>
+    <span class="meta pri-${c.priority}" style="margin-left:auto">${t('pri_'+c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>
-    <div class="row">${c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}
+    <div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}
     ${c.assignees.map(a=>`<span class="avatar">@${esc(nameOf(a))}</span>`).join('')}</div></div>`;
 }
 
@@ -267,25 +357,25 @@ function showCard(id,keep){
   openId=id; const mine=c.assignees.includes(user.email);
   const acts=[];
   if(c.status!=='complete'&&role('dev','admin')){
-    acts.push(mine?`<button class="btn" data-a="unclaim">Release</button>`:`<button class="btn primary" data-a="claim">✋ I'll do this</button>`);
+    acts.push(mine?`<button class="btn" data-a="unclaim">${t('release')}</button>`:`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
   }
-  if(c.status==='ready_to_test'&&role('tester','admin')) acts.push(`<button class="btn ok" data-a="pass">✓ Pass → Complete</button><button class="btn bad" data-a="fail">✗ Fail → back to dev</button>`);
-  if(c.status==='complete'&&role('tester','admin')) acts.push(`<button class="btn" data-a="reopen">Reopen</button>`);
+  if(c.status==='ready_to_test'&&role('tester','admin')) acts.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
+  if(c.status==='complete'&&role('tester','admin')) acts.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
   $('#viewBody').innerHTML=`
-    <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id} · by ${esc(nameOf(c.reporter))} · <span class="pri-${c.priority}">${c.priority}</span></span>
-      <span class="status" style="margin-left:auto;color:var(${COLOR[c.status]});border:1px solid var(${COLOR[c.status]})">${LABEL[c.status]}</span></div>
+    <div class="row"><span class="tag ${c.type}">${c.type}</span><span class="meta">#${c.id} · ${t('by')} ${esc(nameOf(c.reporter))} · <span class="pri-${c.priority}">${t('pri_'+c.priority)}</span></span>
+      <span class="status" style="margin-left:auto;color:var(${COLOR[c.status]});border:1px solid var(${COLOR[c.status]})">${t('s_'+c.status)}</span></div>
     <h3>${esc(c.title)}</h3>
-    <div class="row">${c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${c.assignees.map(a=>`<span class="avatar">@${esc(nameOf(a))}</span>`).join('')||'<span class="meta">Unassigned</span>'}</div>
+    <div class="row">${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}${c.assignees.map(a=>`<span class="avatar">@${esc(nameOf(a))}</span>`).join('')||`<span class="meta">${t('noassignee')}</span>`}</div>
     ${c.description?`<div class="box">${esc(c.description)}</div>`:''}
-    ${c.test_steps.length?`<div class="sec"><h4>🧪 How to test</h4>
+    ${c.test_steps.length?`<div class="sec"><h4>${t('howtest')}</h4>
       ${c.dev_summary?`<div class="box testbox" style="margin-bottom:8px">${esc(c.dev_summary)}</div>`:''}
       <ol class="steps">${c.test_steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></div>`:''}
     <div class="actions">${acts.join('')}</div>
-    <div class="sec"><h4>Comments</h4>
-      ${c.comments.map(m=>`<div class="cm"><b>${esc(nameOf(m.user))}</b> ${esc(m.text)}</div>`).join('')||'<div class="meta">No comments</div>'}
-      <div class="row" style="margin-top:8px"><input id="cmt" placeholder="Write a comment…" style="flex:1"><button class="btn" data-a="comment">Send</button></div></div>
-    <details class="sec hist"><summary>History</summary>${c.history.map(h=>`<div>${new Date(h.at).toLocaleString()} · ${esc(nameOf(h.user))} · ${esc(h.action)} ${esc(h.text)}</div>`).join('')}</details>
-    <div class="actions"><span class="sp"></span><button class="btn" data-a="close">Close</button></div>`;
+    <div class="sec"><h4>${t('comments')}</h4>
+      ${c.comments.map(m=>`<div class="cm"><b>${esc(nameOf(m.user))}</b> ${esc(m.text)}</div>`).join('')||`<div class="meta">${t('nocomments')}</div>`}
+      <div class="row" style="margin-top:8px"><input id="cmt" placeholder="${t('writecomment')}" style="flex:1"><button class="btn" data-a="comment">${t('send')}</button></div></div>
+    <details class="sec hist"><summary>${t('history')}</summary>${c.history.map(h=>`<div>${new Date(h.at).toLocaleString(locale())} · ${esc(nameOf(h.user))} · ${esc(t('a_'+h.action))} ${esc(h.text)}</div>`).join('')}</details>
+    <div class="actions"><span class="sp"></span><button class="btn" data-a="close">${t('close')}</button></div>`;
   $('#viewBody').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>act(c,b.dataset.a));
   if(!keep&&!$('#viewDlg').open)$('#viewDlg').showModal();
 }
@@ -294,7 +384,7 @@ async function act(c,a){
   try{
     let body={};
     if(a==='comment'){body.text=$('#cmt').value; if(!body.text.trim())return}
-    if(a==='fail'){body.text=prompt('Why did the test fail?'); if(!body.text)return}
+    if(a==='fail'){body.text=prompt(t('failprompt')); if(!body.text)return}
     if(a==='pass'){body.text=''}
     await api('POST',`/cards/${c.id}/${a}`,body); await load();
     if(a==='pass'||a==='fail')$('#viewDlg').close();
@@ -303,8 +393,8 @@ async function act(c,a){
 $('#viewDlg').addEventListener('close',()=>openId=null);
 
 $('#helpBtn').onclick=()=>{
-  const mine={dev:'h-dev',tester:'h-tester',admin:'h-admin'}[user?.role];
-  document.querySelectorAll('#helpDlg details').forEach(d=>d.open=(d.id==='h-all'||d.id===mine));
+  const mine=user?.role;
+  document.querySelectorAll('#helpDlg details[data-h]').forEach(d=>d.open=(d.dataset.h==='all'||d.dataset.h===mine));
   $('#helpDlg').showModal();
 };
 try{ if(!localStorage.getItem('devboard.helpSeen')){ localStorage.setItem('devboard.helpSeen','1'); window.__showHelp=true } }catch{}
@@ -319,6 +409,7 @@ for(const [id,setter] of [['#typeSeg',v=>fType=v],['#whoSeg',v=>fWho=v]]){
     document.querySelectorAll(id+' button').forEach(x=>x.classList.remove('on'));b.classList.add('on');setter(b.dataset.v);render()});
 }
 $('#board').addEventListener('click',e=>{const el=e.target.closest('.card');if(el)showCard(+el.dataset.id)});
+applyLang();
 api('GET','/me').then(setUser).catch(showLogin); setInterval(load,5000);
 </script>
 </body>
