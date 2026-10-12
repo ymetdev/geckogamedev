@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: devboard
+    runtime: node
+    plan: starter            # persistent disk requires a paid plan
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: GOOGLE_CLIENT_ID
+        value: 312237530138-2v1mrmvsjbt4bkohqc5akbulr91ri363.apps.googleusercontent.com
+      - key: ADMIN_EMAIL
+        value: temgoodboi@gmail.com
+      - key: DB_FILE
+        value: /var/data/db.json
+    disk:
+      name: devboard-data
+      mountPath: /var/data
+      sizeGB: 1
