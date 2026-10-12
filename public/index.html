@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DevBoard</title>
+<title>GeckoBoard</title>
 <style>
 :root{
   --bg:#0f1115;--panel:#161920;--card:#1c2029;--line:#262b36;--text:#e6e8ee;--mute:#8b93a5;
@@ -79,7 +79,7 @@ textarea{min-height:90px;resize:vertical}
 </head>
 <body>
 <header>
-  <h1>◆ DevBoard</h1>
+  <h1>◆ GeckoBoard</h1>
   <div class="seg" id="typeSeg">
     <button data-v="" class="on">All</button><button data-v="ticket">Tickets</button><button data-v="task">Tasks</button>
   </div>
@@ -106,7 +106,7 @@ textarea{min-height:90px;resize:vertical}
 </form></dialog>
 
 <dialog id="loginDlg"><form class="dlg" id="loginForm">
-  <h3>◆ DevBoard</h3>
+  <h3>◆ GeckoBoard</h3>
   <div class="meta">Sign in with your Google account</div>
   <div id="gbtn" style="min-height:44px"></div>
   <div id="emailLogin" hidden>
@@ -137,7 +137,7 @@ textarea{min-height:90px;resize:vertical}
 </div></dialog>
 
 <dialog id="helpDlg"><div class="dlg">
-  <h3>วิธีใช้ DevBoard</h3>
+  <h3>วิธีใช้ GeckoBoard</h3>
   <div class="flow"><span>Open</span>→<span style="color:var(--prog)">In Progress</span>→<span style="color:var(--test)">Ready to Test</span>→<span style="color:var(--done)">Complete</span></div>
   <div class="help">
     <details open id="h-all"><summary>ทุกคน: สร้างการ์ด</summary><ol>
@@ -146,8 +146,8 @@ textarea{min-height:90px;resize:vertical}
       <li>ใช้ปุ่มกรอง <b>Mine / Unassigned</b> เพื่อหางานของตัวเองหรืองานที่ยังไม่มีคนรับ</li></ol></details>
     <details id="h-dev"><summary>Dev: รับงานแล้วสั่ง Claude</summary>
       <b>ตั้งค่าครั้งแรก</b><ol>
-      <li>Clone โปรเจกต์ DevBoard (<code>github.com/ymetdev/geckogamedev</code>) แล้วรัน <code>npm install</code></li>
-      <li>คลิกชื่อมุมขวาบน → <b>Connect Claude (MCP token)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/devboard</code> เป็นที่อยู่จริง)</li>
+      <li>Clone โปรเจกต์ GeckoBoard (<code>github.com/ymetdev/geckogamedev</code>) แล้วรัน <code>npm install</code></li>
+      <li>คลิกชื่อมุมขวาบน → <b>Connect Claude (MCP token)</b> แล้ว copy คำสั่งไปรันใน terminal (แก้ <code>/path/to/geckogamedev</code> เป็นที่อยู่จริง)</li>
       <li>Token เป็นของคุณคนเดียว ห้ามแชร์</li></ol>
       <b>ทุกครั้งที่ทำงาน</b><ol>
       <li>เปิดการ์ด กด <b>✋ I'll do this</b> (การ์ดย้ายไป In Progress) เลือกได้หลายใบ</li>
@@ -210,7 +210,7 @@ document.addEventListener('click',()=>$('#menu')?.classList.remove('show'));
 async function menuAct(m){
   if(m==='out'){await api('POST','/logout',{});showLogin()}
   if(m==='token'){const me=await api('GET','/me');
-    $('#tokenCmd').textContent=`claude mcp add devboard -e DEVBOARD_URL=${location.origin} -e DEVBOARD_TOKEN=${me.token} -- node /path/to/devboard/mcp/server.js`;$('#tokenDlg').showModal()}
+    $('#tokenCmd').textContent=`claude mcp add geckoboard -e GECKOBOARD_URL=${location.origin} -e GECKOBOARD_TOKEN=${me.token} -- node /path/to/geckogamedev/mcp/server.js`;$('#tokenDlg').showModal()}
   if(m==='team'){renderTeam();$('#teamDlg').showModal()}
 }
 function renderTeam(){

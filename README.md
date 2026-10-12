@@ -1,4 +1,4 @@
-# DevBoard
+# GeckoBoard
 
 Kanban สำหรับทีมทำเกม: **Ticket + Task** → Dev กด "I'll do this" → Claude (MCP) แก้ให้ → **Ready to Test** (พร้อมวิธีเทส) → Tester ผ่าน → **Complete**
 
@@ -7,9 +7,9 @@ Kanban สำหรับทีมทำเกม: **Ticket + Task** → Dev ก
     GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com npm start   # http://localhost:3000  (env: PORT, DB_FILE)
 
 ## เชื่อม Claude (แต่ละ Dev ในเครื่องตัวเอง)
-    claude mcp add devboard \
-      -e DEVBOARD_URL=http://<host>:3000 -e DEVBOARD_TOKEN=<token ส่วนตัว> \
-      -- node /path/to/devboard/mcp/server.js
+    claude mcp add geckoboard \
+      -e GECKOBOARD_URL=http://<host>:3000 -e GECKOBOARD_TOKEN=<token ส่วนตัว> \
+      -- node /path/to/geckogamedev/mcp/server.js
 
 จากนั้นใน Claude Code (เปิดใน repo เกม) พิมพ์ได้เลย เช่น
 - "ทำ card ที่ฉัน mark ไว้ทั้งหมด"  (multiple)

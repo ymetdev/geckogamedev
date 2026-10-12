@@ -1,4 +1,4 @@
-// DevBoard backend: zero-dependency HTTP server + JSON file store.
+// GeckoBoard backend: zero-dependency HTTP server + JSON file store.
 import http from 'node:http';
 import pg from 'pg';
 import fs from 'node:fs';
@@ -339,4 +339,4 @@ http.createServer(async (req, res) => {
   } catch (e) {
     sendJson(res, e.code || 400, { error: e.message });
   }
-}).listen(PORT, () => console.log(`DevBoard running at http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`GeckoBoard running at http://localhost:${PORT}`));

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// DevBoard MCP server (stdio). Each dev runs it with their own Claude.
-// Env: DEVBOARD_URL (default http://localhost:3000), DEVBOARD_TOKEN (your personal token from the web app: Profile → MCP token)
+// GeckoBoard MCP server (stdio). Each dev runs it with their own Claude.
+// Env: GECKOBOARD_URL (default http://localhost:3000), GECKOBOARD_TOKEN (your personal token from the web app: Profile → MCP token)
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-const BASE = (process.env.DEVBOARD_URL || 'http://localhost:3000').replace(/\/$/, '');
-const TOKEN = process.env.DEVBOARD_TOKEN || '';
+const BASE = (process.env.GECKOBOARD_URL || process.env.DEVBOARD_URL || 'http://localhost:3000').replace(/\/$/, '');
+const TOKEN = process.env.GECKOBOARD_TOKEN || process.env.DEVBOARD_TOKEN || '';
 
 async function call(method, path, body) {
   const res = await fetch(BASE + '/api' + path, {
@@ -26,11 +26,11 @@ const brief = (c) => ({
   assignees: c.assignees, tags: c.tags,
 });
 
-if (!TOKEN) { console.error('DEVBOARD_TOKEN is required (copy it from the web app profile menu)'); process.exit(1); }
+if (!TOKEN) { console.error('GECKOBOARD_TOKEN is required (copy it from the web app profile menu)'); process.exit(1); }
 
-const server = new McpServer({ name: 'devboard', version: '1.0.0' }, {
+const server = new McpServer({ name: 'geckoboard', version: '1.0.0' }, {
   instructions:
-    'DevBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
+    'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
     '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
     'for details, fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
     'summary and clear step-by-step manual test instructions for the tester. Never mark ready if the fix is unfinished.',
@@ -100,7 +100,7 @@ server.registerPrompt('do_my_cards', {
   description: 'Fix all cards I claimed and mark them ready to test',
 }, () => ({
   messages: [{ role: 'user', content: { type: 'text', text:
-    'Use DevBoard: list_my_cards, then for each card read it with get_card, implement the fix in this repo, ' +
+    'Use GeckoBoard: list_my_cards, then for each card read it with get_card, implement the fix in this repo, ' +
     'verify it, then call mark_ready_for_test with a summary and clear tester steps. Report what you did per card.' } }],
 }));
 
