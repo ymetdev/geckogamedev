@@ -34,6 +34,7 @@ h1,h2,h3,h4{margin:0}
 .btn:hover{background:#252b3a;border-color:#3a4358}.btn:active{transform:translateY(1px)}
 .btn:disabled{opacity:.55;cursor:not-allowed}
 .btn svg{width:17px;height:17px;flex:none}
+a.btn{text-decoration:none}
 .btn.primary{background:linear-gradient(135deg,#7c8cff,#a78bfa);border-color:transparent;color:var(--ink);font-weight:650}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.ok{background:var(--done);border-color:transparent;color:#05220f;font-weight:650}.btn.ok:hover{filter:brightness(1.07)}
@@ -219,7 +220,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
 @keyframes topbar{0%{width:0;margin-left:0}50%{width:70%;margin-left:10%}100%{width:0;margin-left:100%}}
 #boot{position:fixed;inset:0;background:var(--bg);z-index:250;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;color:var(--mute)}
 #boot .spin{width:36px;height:36px;border-width:4px}#boot small{max-width:320px;text-align:center;padding:0 16px}
-#toast{position:fixed;inset:auto;left:50%;bottom:28px;margin:0;transform:translateX(-50%);z-index:200;display:none;align-items:center;gap:14px;background:#2a1417ee;border:1px solid #6b2f35;color:#ffd7da;padding:11px 16px;border-radius:12px;max-width:min(92vw,560px);width:max-content;box-shadow:var(--shadow);backdrop-filter:blur(8px);overflow:visible}
+#toast{position:fixed;inset:auto;left:50%;bottom:28px;margin:0;transform:translateX(-50%);z-index:200;display:none;align-items:center;gap:14px;background:#1c2131ee;border:1px solid var(--line2);color:var(--text);padding:11px 16px;border-radius:12px;max-width:min(92vw,560px);width:max-content;box-shadow:var(--shadow);backdrop-filter:blur(8px);overflow:visible}
 #toast.ok{background:#14231bee;border-color:#2c5a3f;color:#d6f5e0}
 #toast button{background:none;border:1px solid currentColor;color:inherit;border-radius:8px;padding:3px 12px;cursor:pointer;font-weight:650;opacity:.95}
 #lbDlg{width:100vw;height:100dvh;max-width:none;max-height:none;border:0;border-radius:0;background:#000e;padding:0;overflow:hidden;backdrop-filter:blur(6px)}
