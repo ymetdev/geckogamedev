@@ -719,6 +719,26 @@ async function api(req, res, url) {
       t.rows.push(row); hist(t, { op: 'add', row: row.id, label: rowLabel(t, row) }); await save();
       return sendJson(res, 201, row);
     }
+    if (parts[2] === 'rows' && parts.length === 3 && method === 'PATCH') { // bulk edit: { updates: [{ row, cells }] } — all validated first, then applied
+      const ups = Array.isArray(body.updates) ? body.updates : []; need(ups.length > 0 && ups.length <= 500, 400, 'Send 1-500 updates');
+      const prepared = ups.map((u) => { const row = t.rows.find((r) => r.id === String(u.row)); need(row, 404, `Row ${u.row} not found`); return [row, byName(t, u.cells)]; });
+      let changed = 0;
+      for (const [row, cells] of prepared) for (const [cid, v] of Object.entries(cells)) {
+        const from = row.cells[cid] ?? ''; if (from === v) continue;
+        row.cells[cid] = v; changed++;
+        hist(t, { op: 'edit', row: row.id, label: rowLabel(t, row), col: t.columns.find((c) => c.id === cid).name, from, to: v });
+      }
+      if (changed) await save();
+      return sendJson(res, 200, { updated: prepared.length, changed });
+    }
+    if (parts[2] === 'rows' && parts.length === 3 && method === 'DELETE') { // bulk delete: { rows: [ids] }
+      const ids = Array.isArray(body.rows) ? body.rows.map(String) : []; need(ids.length > 0 && ids.length <= 500, 400, 'Send 1-500 row ids');
+      const gone = t.rows.filter((r) => ids.includes(r.id)); need(gone.length === new Set(ids).size, 404, 'Some rows were not found');
+      t.rows = t.rows.filter((r) => !gone.includes(r));
+      for (const c of db.cards) if (c.data) c.data = c.data.filter((d) => !(d.t === t.id && ids.includes(d.r)));
+      for (const row of gone) hist(t, { op: 'delete', row: row.id, label: rowLabel(t, row), from: JSON.stringify(Object.fromEntries(t.columns.map((c) => [c.name, row.cells[c.id] ?? '']))) });
+      await save(); return sendJson(res, 200, { deleted: gone.length });
+    }
     if (parts[2] === 'rows' && parts[3] && method === 'PATCH') {
       const row = t.rows.find((r) => r.id === parts[3]); need(row, 404, 'Row not found');
       const cells = byName(t, body.cells); let changed = 0;

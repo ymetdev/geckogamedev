@@ -187,6 +187,53 @@ export function createServer({ base, token, project = '' }) {
     return { table: t.id, total_rows: t.rows.length, columns: t.columns.map((c) => `${c.name}:${c.type}`) };
   }));
 
+  const confirmNote = ' Destructive: only do this when the user clearly asked for it; if unsure which table/rows, ASK first.';
+  server.registerTool('update_rows', {
+    description: 'Edit MANY rows at once (dev/admin only, up to 500, all-or-nothing). Each item: {row, values} with column NAMES as keys. Use for bulk balance changes, e.g. +10% HP on all monsters.',
+    inputSchema: { table: z.string(), updates: z.array(z.object({ row: z.string(), values: z.record(z.union([z.string(), z.number(), z.boolean()])) })).min(1).max(500) },
+  }, wrap(({ table, updates }) => call('PATCH', `/tables/${encodeURIComponent(table)}/rows`, { updates: updates.map((u) => ({ row: u.row, cells: u.values })) })));
+
+  server.registerTool('delete_rows', {
+    description: 'Delete rows from a game-data table by row id (dev/admin only, up to 500). Deleted values stay in the table history, but cannot be restored with a tool.' + confirmNote,
+    inputSchema: { table: z.string(), rows: z.array(z.string()).min(1).max(500).describe('Row ids from get_table, e.g. ["r3","r4"]') },
+  }, wrap(({ table, rows }) => call('DELETE', `/tables/${encodeURIComponent(table)}/rows`, { rows })));
+
+  server.registerTool('update_table', {
+    description: 'Change a table\'s structure (dev/admin only): rename the table, add columns, rename columns, change a column\'s type/options, remove columns, in one call. Existing values are kept when a column is only renamed; type changes convert values where possible; removing a column deletes its values.' + confirmNote,
+    inputSchema: {
+      table: z.string(),
+      name: z.string().optional().describe('New table name'),
+      add_columns: z.array(z.object({ name: z.string(), type: z.enum(['text', 'number', 'select', 'bool']).optional(), options: z.array(z.string()).optional() })).optional(),
+      rename_columns: z.record(z.string()).optional().describe('{"OldName": "NewName"}'),
+      change_columns: z.array(z.object({ name: z.string(), type: z.enum(['text', 'number', 'select', 'bool']).optional(), options: z.array(z.string()).optional() })).optional().describe('Change type/options of existing columns (by current name)'),
+      remove_columns: z.array(z.string()).optional(),
+    },
+  }, wrap(async ({ table, name, add_columns, rename_columns, change_columns, remove_columns }) => {
+    const t = await call('GET', `/tables/${encodeURIComponent(table)}`);
+    const find = (n) => { const c = t.columns.find((x) => x.name.toLowerCase() === String(n).toLowerCase()); if (!c) throw new Error(`Unknown column "${n}"`); return c; };
+    let cols = t.columns.map((c) => ({ ...c }));
+    for (const n of remove_columns || []) { const c = find(n); cols = cols.filter((x) => x.id !== c.id); }
+    for (const ch of change_columns || []) { const c = cols.find((x) => x.id === find(ch.name).id); if (!c) throw new Error(`Column "${ch.name}" was removed in the same call`); if (ch.type) c.type = ch.type; if (ch.options) c.options = ch.options; }
+    for (const [from, to] of Object.entries(rename_columns || {})) { const c = cols.find((x) => x.id === find(from).id); if (!c) throw new Error(`Column "${from}" was removed in the same call`); c.name = to; }
+    cols.push(...(add_columns || []).map((c) => ({ name: c.name, type: c.type || 'text', options: c.options })));
+    const r = await call('PATCH', `/tables/${encodeURIComponent(table)}`, { ...(name && { name }), columns: cols });
+    return { id: r.id, name: r.name, columns: r.columns.map((c) => `${c.name}:${c.type}`), rows: r.rows.length };
+  }));
+
+  server.registerTool('delete_table', {
+    description: 'Delete a whole game-data table with ALL its rows (ADMIN only; irreversible).' + confirmNote + ' Prefer export first (the user can download CSV/JSON in the web app).',
+    inputSchema: { table: z.string(), confirm_name: z.string().describe('Must equal the table name exactly; ask the user to confirm the name') },
+  }, wrap(async ({ table, confirm_name }) => {
+    const t = await call('GET', `/tables/${encodeURIComponent(table)}`);
+    if (t.name !== confirm_name) throw new Error(`confirm_name must equal the table name ("${t.name}"). Ask the user before deleting.`);
+    await call('DELETE', `/tables/${encodeURIComponent(table)}`); return { deleted: t.name, rows_lost: t.rows.length };
+  }));
+
+  server.registerTool('table_history', {
+    description: 'Recent changes of a table (who changed which row/column from → to, imports, deletions). Use to answer "who changed X" or to find a deleted row\'s old values.',
+    inputSchema: { table: z.string(), limit: z.number().int().min(1).max(200).optional() },
+  }, wrap(async ({ table, limit }) => [...(await call('GET', `/tables/${encodeURIComponent(table)}`)).history].reverse().slice(0, limit || 30)));
+
   server.registerPrompt('import_game_data', {
     description: 'Scan this game repo for balance data (monsters, items, zones, skills…) and put it into GeckoBoard tables',
     argsSchema: { what: z.string().optional().describe('What to import, e.g. "monster stats" (default: look for balance data)') },
