@@ -190,7 +190,8 @@ function renderUserBox() {
   $('#userBox').innerHTML = `<div class="chip" id="chip" role="button" tabindex="0" aria-label="${esc(u.name)}"><span class="av" style="background:hsl(${hue(u.email)} 45% 40%)">${esc([...u.name][0]?.toUpperCase() || '?')}</span><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
    <div class="menu" id="menu">
      <button data-m="token">${t('menu_token')}</button>
-     ${u.role === 'admin' ? `<button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button>` : ''}
+     ${u.role === 'admin' ? `<button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button><button data-m="backup">${t('menu_backup')}</button>` : ''}
+     ${installEvt ? `<button data-m="install">📲 ${t('menu_install')}</button>` : ''}
      <button data-m="out">${t('menu_out')}</button></div>`;
   $('#chip').onclick = (e) => { e.stopPropagation(); $('#menu').classList.toggle('show'); };
   $$('#menu button').forEach((b) => (b.onclick = () => menuAct(b.dataset.m)));
@@ -219,6 +220,8 @@ async function menuAct(m) {
   if (m === 'token') { const me = await api('GET', '/me'); showToken(me.token); $('#tokenDlg').showModal(); }
   if (m === 'team') { renderTeam(); $('#teamDlg').showModal(); }
   if (m === 'storage') { await renderStorage(); $('#storDlg').showModal(); }
+  if (m === 'backup') { await renderBackups(); $('#bkDlg').showModal(); }
+  if (m === 'install' && installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; renderUserBox(); }
 }
 function renderTeam() {
   $('#teamList').innerHTML = users.map((u) => `<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span>
@@ -250,9 +253,27 @@ async function renderStorage() {
 $('#storClean').onclick = () => withBusy($('#storClean'), async () => {
   try { const r = await api('POST', '/storage/recycle', {}); await renderStorage(); await load(); toast(r.purged ? t('cleaned', fmtB(r.freed)) : t('nothing_to_clean')); } catch (e) { toast(e.message); }
 });
+// ---------- export & backups (admin) ----------
+async function renderBackups() {
+  const list = await api('GET', '/backups');
+  const lbl = (x) => t(x === 'auto' ? 'bk_by_auto' : x === 'manual' ? 'bk_by_manual' : x === 'before-restore' ? 'bk_by_before' : x) || x;
+  $('#bkList').innerHTML = list.map((b) => `<div class="trow"><span class="e">${new Date(b.at).toLocaleString(locale())} <span class="meta">· ${esc(lbl(b.label))} · ${fmtB(b.size)}</span></span><button class="btn" data-restore="${esc(b.id)}" data-at="${esc(new Date(b.at).toLocaleString(locale()))}">${t('bk_restore')}</button></div>`).join('') || `<div class="meta">${t('bk_none')}</div>`;
+  $$('#bkList [data-restore]').forEach((b) => (b.onclick = () => {
+    if (!confirm(t('bk_confirm', b.dataset.at))) return;
+    withBusy(b, async () => { try { const r = await api('POST', `/backups/${encodeURIComponent(b.dataset.restore)}/restore`, {}); $('#bkDlg').close(); await load(true); toast(t('bk_restored', r.cards)); } catch (e) { $('#bkErr').textContent = e.message; } });
+  }));
+}
+$('#bkNow').onclick = () => withBusy($('#bkNow'), async () => { try { await api('POST', '/backups', {}); $('#bkErr').textContent = ''; await renderBackups(); toast(t('bk_done')); } catch (e) { $('#bkErr').textContent = e.message; } });
+
+// ---------- installable app (PWA) ----------
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (user) renderUserBox(); });
+window.addEventListener('appinstalled', () => { installEvt = null; if (user) renderUserBox(); toast(t('installed')); });
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+
 let cfg = null;
 async function initLogin() {
-  cfg = cfg || await api('GET', '/config');
+  try { cfg = cfg || await api('GET', '/config'); } catch (e) { $('#loginErr').textContent = e.message; return; } // e.g. offline
   $('#emailLogin').hidden = !cfg.emailLogin;
   if (!cfg.googleClientId) { if (!cfg.emailLogin) $('#loginErr').textContent = t('noGoogle'); return; }
   if (!window.google) {

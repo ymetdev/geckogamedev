@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GeckoBoard</title>
 <meta name="theme-color" content="#0a0c10">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GeckoBoard"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
@@ -158,7 +163,8 @@
       <li><b>เลิกทำ</b>: หลังรับงาน/ปล่อย/ส่งเทส/ผ่าน/ไม่ผ่าน/ลบ จะมีปุ่ม "เลิกทำ" ที่มุมล่างนาน 8 วินาที (ลบการ์ดกู้คืนได้ 7 วัน)</li>
       <li>ฟอร์มสร้างการ์ดที่ยังไม่เสร็จ <b>ถูกบันทึกร่างให้อัตโนมัติ</b> ปิดแล้วเปิดใหม่ข้อความยังอยู่</li>
       <li>กดปุ่ม <b>↕</b> เพื่อสลับระหว่างเรียงอัตโนมัติ (ความสำคัญ → วันกำหนด) กับ <b>เรียงเอง</b> ลากการ์ดสลับลำดับในคอลัมน์ได้ ทุกคนเห็นลำดับเดียวกัน</li>
-      <li>บอร์ดอัปเดตสดเมื่อมีคนเปลี่ยน การ์ดที่เปลี่ยนจะเรืองแสงสั้นๆ</li></ul></details>
+      <li>บอร์ดอัปเดตสดเมื่อมีคนเปลี่ยน การ์ดที่เปลี่ยนจะเรืองแสงสั้นๆ</li>
+      <li><b>ติดตั้งเป็นแอป</b>: Android/PC ใช้เมนูชื่อ → ติดตั้งเป็นแอป (หรือไอคอนติดตั้งที่แถบที่อยู่) · iPhone ใช้ Safari → ปุ่มแชร์ → เพิ่มไปยังหน้าจอโฮม</li></ul></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
       <li><b>dev</b>: สร้าง/ลบการ์ด รับ/ปล่อยการ์ด ส่งพร้อมเทส (เอง หรือผ่าน Claude)</li>
       <li><b>tester</b>: ผ่าน / ไม่ผ่าน / เปิดใหม่</li>
@@ -214,7 +220,8 @@
       <li><b>Undo</b>: after claiming / releasing / sending to test / pass / fail / delete, an "Undo" button appears at the bottom for 8 seconds (deleted cards can be restored for 7 days)</li>
       <li>An unfinished new-card form is <b>saved as a draft</b>; close it and reopen and your text is still there</li>
       <li>Use the <b>↕</b> button to switch between automatic order (priority → due date) and <b>manual order</b>: drag cards up and down in a column; everyone sees the same order</li>
-      <li>The board updates live when someone changes something; changed cards glow briefly</li></ul></details>
+      <li>The board updates live when someone changes something; changed cards glow briefly</li>
+      <li><b>Install as an app</b>: Android/PC use your name menu → Install app (or the install icon in the address bar) · iPhone: Safari → Share → Add to Home Screen</li></ul></details>
     <details><summary>What can each role do?</summary><ul>
       <li><b>dev</b>: create/delete cards, claim/release, send to Ready to Test (by hand or via Claude)</li>
       <li><b>tester</b>: Pass / Fail / Reopen</li>
@@ -244,6 +251,12 @@
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
 <dialog id="sumDlg"><div class="dlg"><h3 data-i18n="summary"></h3><div id="sumBody" class="help" style="max-height:72vh"></div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#sumDlg').close()" data-i18n="close"></button></div></div></dialog>
+<dialog id="bkDlg"><div class="dlg"><h3 data-i18n="bk_title"></h3>
+  <div class="meta" data-i18n="bk_note"></div>
+  <div class="row"><a class="btn" id="bkJson" href="/api/export?format=json" download data-i18n="bk_json"></a><a class="btn" id="bkCsv" href="/api/export?format=csv" download data-i18n="bk_csv"></a><button class="btn primary" id="bkNow" data-i18n="bk_now"></button></div>
+  <div class="sec"><h4 data-i18n="bk_list"></h4><div id="bkList"></div></div>
+  <div class="err" id="bkErr"></div>
+  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#bkDlg').close()" data-i18n="close"></button></div></div></dialog>
 <dialog id="storDlg"><div class="dlg"><h3 data-i18n="storage_title"></h3><div id="storBody" style="display:flex;flex-direction:column;gap:10px"></div>
   <div class="actions"><button class="btn" id="storClean" data-i18n="clean_now"></button><span class="sp"></span><button class="btn" onclick="$('#storDlg').close()" data-i18n="close"></button></div></div></dialog>
 <dialog id="lbDlg"><div class="lbwrap" id="lbWrap"><img id="lbImg" alt=""></div>

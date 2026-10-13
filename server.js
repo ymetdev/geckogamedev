@@ -55,6 +55,7 @@ const pool = DATABASE_URL
 if (pool) {
   await pool.query('CREATE TABLE IF NOT EXISTS devboard_state (id int PRIMARY KEY, data jsonb NOT NULL)');
   await pool.query('CREATE TABLE IF NOT EXISTS devboard_blobs (hash text PRIMARY KEY, mime text NOT NULL, data bytea, thumb bytea)');
+  await pool.query('CREATE TABLE IF NOT EXISTS devboard_backups (id serial PRIMARY KEY, created_at timestamptz NOT NULL DEFAULT now(), label text NOT NULL, size int NOT NULL, data jsonb NOT NULL)');
   const r = await pool.query('SELECT data FROM devboard_state WHERE id = 1');
   if (r.rows[0]) db = r.rows[0].data;
 } else {
@@ -228,6 +229,57 @@ async function delBlob(hash) { // remove everything for a blob nobody references
 }
 const allFiles = () => [...db.cards.map((c) => [c, false]), ...db.trash.map((c) => [c, true])].flatMap(([c, trash]) => c.files.map((f) => ({ f, c, trash })));
 async function releaseBlob(hash) { if (!allFiles().some(({ f }) => f.blob === hash)) await delBlob(hash); }
+
+// Backups: a snapshot of cards + users (not sessions) is taken about once a day and kept for BACKUP_KEEP copies.
+// Postgres: table devboard_backups. File mode: ./data/backups/*.json.
+const BACKUP_KEEP = Number(process.env.BACKUP_KEEP || 14);
+const BACKUP_MAX_BYTES = 25e6;
+const BACKUP_DIR = path.join(path.dirname(DB_FILE), 'backups');
+async function listBackups() {
+  if (pool) { const r = await pool.query('SELECT id, created_at, label, size FROM devboard_backups ORDER BY id DESC'); return r.rows.map((x) => ({ id: String(x.id), at: x.created_at.toISOString(), label: x.label, size: x.size })); }
+  try {
+    return fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json')).sort().reverse().map((f) => {
+      const st = fs.statSync(path.join(BACKUP_DIR, f)); return { id: f, at: st.mtime.toISOString(), label: f.replace(/^.*?__/, '').replace(/\.json$/, ''), size: st.size };
+    });
+  } catch { return []; }
+}
+async function makeBackup(label = 'manual') {
+  const body = JSON.stringify({ version: 1, taken_at: now(), seq: db.seq, cards: db.cards, trash: db.trash, users: db.users });
+  if (body.length > BACKUP_MAX_BYTES) throw new HttpError(413, 'Data is too large to back up automatically');
+  if (pool) {
+    await pool.query('INSERT INTO devboard_backups (label, size, data) VALUES ($1, $2, $3::jsonb)', [label, body.length, body]);
+    await pool.query('DELETE FROM devboard_backups WHERE id NOT IN (SELECT id FROM devboard_backups ORDER BY id DESC LIMIT $1)', [BACKUP_KEEP]);
+  } else {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.writeFileSync(path.join(BACKUP_DIR, `${now().replace(/[:.]/g, '-')}__${label}.json`), body);
+    for (const old of (await listBackups()).slice(BACKUP_KEEP)) { try { fs.unlinkSync(path.join(BACKUP_DIR, old.id)); } catch { /* gone */ } }
+  }
+  return { label, size: body.length };
+}
+async function autoBackup() { // at most one automatic snapshot per ~20 hours
+  const latest = (await listBackups())[0];
+  if (!latest || Date.now() - Date.parse(latest.at) > 20 * 36e5) { await makeBackup('auto'); console.log('Backup taken'); }
+}
+async function restoreBackup(id) { // brings back cards + trash (users and sessions are left alone); a safety copy is taken first
+  let data;
+  if (pool) { const r = await pool.query('SELECT data FROM devboard_backups WHERE id = $1', [Number(id) || 0]); data = r.rows[0]?.data; }
+  else { try { data = JSON.parse(fs.readFileSync(path.join(BACKUP_DIR, path.basename(id)), 'utf8')); } catch { /* missing */ } }
+  need(data && Array.isArray(data.cards), 404, 'Backup not found');
+  await makeBackup('before-restore');
+  db.cards = data.cards; db.trash = data.trash || []; db.seq = Math.max(db.seq, data.seq || 0);
+  for (const c of db.cards) { c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; }
+  await save();
+  return { cards: db.cards.length };
+}
+const csvCell = (v) => { const s = Array.isArray(v) ? v.join('; ') : String(v ?? ''); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function exportCsv() { // UTF-8 with BOM so Excel shows Thai correctly
+  const nameOf = (e) => db.users.find((u) => u.email === e)?.name || e;
+  const head = ['id', 'type', 'title', 'status', 'priority', 'tags', 'owner', 'reporter', 'due', 'milestone', 'parent', 'created', 'updated', 'description', 'summary', 'test_steps', 'comments'];
+  const rows = db.cards.map((c) => [c.id, c.type, c.title, c.status, c.priority, c.tags, c.assignees.map(nameOf), nameOf(c.reporter), c.due, c.milestone, c.parent, c.created_at, c.updated_at,
+    c.description, c.dev_summary, c.test_steps.map((x, i) => `${i + 1}. ${x}`).join('\n'), c.comments.map((m) => `${nameOf(m.user)}: ${m.text}`).join('\n')]);
+  return '\ufeff' + [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+}
+setInterval(() => autoBackup().catch((e) => console.error('backup failed:', e.message)), 6 * 36e5);
 
 // Recycler: frees space by purging original files (never the thumbnails), oldest/biggest-value-last first
 let recycling = false;
@@ -405,6 +457,25 @@ async function api(req, res, url) {
       return sendJson(res, 200, { ok: true });
     }
     throw new HttpError(405, 'Method not allowed');
+  }
+
+  // ---- backups & export (admin) ----
+  if (parts[0] === 'backups') {
+    forbid(me, 'admin');
+    if (method === 'GET' && parts.length === 1) return sendJson(res, 200, await listBackups());
+    if (method === 'POST' && parts.length === 1) { const r = await makeBackup('manual'); return sendJson(res, 200, { ...r, backups: await listBackups() }); }
+    if (method === 'POST' && parts[2] === 'restore') { const r = await restoreBackup(decodeURIComponent(parts[1])); return sendJson(res, 200, r); }
+    throw new HttpError(405, 'Method not allowed');
+  }
+  if (parts[0] === 'export' && method === 'GET') {
+    forbid(me, 'admin');
+    const day = now().slice(0, 10);
+    if (url.searchParams.get('format') === 'csv') {
+      res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="geckoboard-${day}.csv"` });
+      return res.end(exportCsv());
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="geckoboard-${day}.json"` });
+    return res.end(JSON.stringify({ exported_at: now(), cards: db.cards, trash: db.trash, users: db.users.map(publicUser) }, null, 2)); // no tokens
   }
 
   // ---- storage ----
@@ -699,14 +770,15 @@ async function api(req, res, url) {
 }
 
 // ---- static files ----
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.ico': 'image/x-icon' };
 function serveStatic(req, res, url) {
   const rel = url.pathname === '/' ? '/index.html' : url.pathname;
   const file = path.join(__dirname, 'public', path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(path.join(__dirname, 'public'))) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    const noCache = /(^|[\\/])sw\.js$/.test(file) || file.endsWith('.webmanifest'); // always fresh so updates reach installed apps
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', ...(noCache && { 'Cache-Control': 'no-cache' }) });
     res.end(buf);
   });
 }
@@ -727,7 +799,8 @@ async function mcp(req, res) {
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
-    if (url.pathname === '/mcp') await mcp(req, res);
+    if (url.pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }); res.end('ok'); }
+    else if (url.pathname === '/mcp') await mcp(req, res);
     else if (url.pathname.startsWith('/api/')) await api(req, res, url);
     else serveStatic(req, res, url);
   } catch (e) {
@@ -737,4 +810,10 @@ http.createServer(async (req, res) => {
   console.log(`GeckoBoard running at http://localhost:${PORT}`);
   recycle().catch((e) => console.error('recycle failed:', e.message));
   purgeTrash().catch((e) => console.error('purgeTrash failed:', e.message));
+  setTimeout(() => autoBackup().catch((e) => console.error('backup failed:', e.message)), 30000);
+  // Render's free plan sleeps after ~15 min without inbound traffic; a ping through the public URL every 10 min keeps it awake.
+  if (PUBLIC_URL && process.env.KEEP_AWAKE !== '0') {
+    setInterval(() => fetch(`${PUBLIC_URL}/healthz`, { signal: AbortSignal.timeout(15000) }).catch(() => {}), 10 * 60e3);
+    console.log(`Keep-awake ping enabled for ${PUBLIC_URL} (set KEEP_AWAKE=0 to disable)`);
+  }
 });
