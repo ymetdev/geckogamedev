@@ -61,7 +61,7 @@ if (pool) {
 } else {
   try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
 }
-db.users ||= []; db.sessions ||= {}; db.trash ||= []; db.projects ||= [];
+db.users ||= []; db.sessions ||= {}; db.trash ||= []; db.projects ||= []; db.tables ||= []; db.tseq ||= db.tables.length;
 // one-time migration: files from the first version (id-addressed table / raw files) -> content-addressed blobs
 for (const c of db.cards) for (const f of c.files || []) {
   if (f.blob) continue;
@@ -287,7 +287,7 @@ async function listBackups() {
   } catch { return []; }
 }
 async function makeBackup(label = 'manual') {
-  const body = JSON.stringify({ version: 2, taken_at: now(), seq: db.seq, cards: db.cards, trash: db.trash, users: db.users, projects: db.projects });
+  const body = JSON.stringify({ version: 2, taken_at: now(), seq: db.seq, cards: db.cards, trash: db.trash, users: db.users, projects: db.projects, tables: db.tables, tseq: db.tseq });
   if (body.length > BACKUP_MAX_BYTES) throw new HttpError(413, 'Data is too large to back up automatically');
   if (pool) {
     await pool.query('INSERT INTO devboard_backups (label, size, data) VALUES ($1, $2, $3::jsonb)', [label, body.length, body]);
@@ -311,6 +311,7 @@ async function restoreBackup(id) { // brings back cards + trash (users and sessi
   await makeBackup('before-restore');
   db.cards = data.cards; db.trash = data.trash || []; db.seq = Math.max(db.seq, data.seq || 0);
   if (Array.isArray(data.projects) && data.projects.length) db.projects = data.projects;
+  if (Array.isArray(data.tables)) { db.tables = data.tables; db.tseq = Math.max(db.tseq || 0, data.tseq || 0); }
   for (const c of [...db.cards, ...db.trash]) { c.project ??= db.projects[0].id; c.num ??= c.id; }
   for (const c of db.cards) { c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; }
   await save();
@@ -568,7 +569,7 @@ async function api(req, res, url) {
       return res.end(exportCsv());
     }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="geckoboard-${day}.json"` });
-    return res.end(JSON.stringify({ exported_at: now(), projects: db.projects.map(({ discord_webhook, ...p }) => p), cards: db.cards, trash: db.trash, users: db.users.map(publicUser) }, null, 2)); // no tokens
+    return res.end(JSON.stringify({ exported_at: now(), projects: db.projects.map(({ discord_webhook, ...p }) => p), cards: db.cards, trash: db.trash, tables: db.tables, users: db.users.map(publicUser) }, null, 2)); // no tokens
   }
 
   // ---- storage ----
@@ -623,6 +624,130 @@ async function api(req, res, url) {
     log(card, user, 'restored');
     await save();
     return sendJson(res, 200, card);
+  }
+
+  // ---- game data tables (balance sheets: monsters, zones, items...) ----
+  if (parts[0] === 'tables') {
+    const COLTYPES = ['text', 'number', 'select', 'bool'];
+    const tOf = (id) => { const t = db.tables.find((x) => x.id === id); need(t && roleIn(me, t.project), 404, 'Table not found'); return t; };
+    const cleanCols = (t, cols) => {
+      need(Array.isArray(cols) && cols.length >= 1 && cols.length <= 40, 400, 'A table needs 1-40 columns');
+      const out = []; const seen = new Set();
+      for (const c of cols) {
+        const name = clean(c.name, 40); need(name, 400, 'Column name required');
+        need(!seen.has(name.toLowerCase()), 400, `Duplicate column "${name}"`); seen.add(name.toLowerCase());
+        const type = COLTYPES.includes(c.type) ? c.type : 'text';
+        const id = c.id && t.columns.some((x) => x.id === c.id) ? c.id : `c${++t.cseq}`;
+        out.push({ id, name, type, ...(type === 'select' && { options: [...new Set((Array.isArray(c.options) ? c.options : String(c.options || '').split(',')).map((o) => clean(o, 40)).filter(Boolean))].slice(0, 50) }) });
+      }
+      return out;
+    };
+    const cell = (col, v) => {
+      if (col.type === 'number') { if (v === '' || v == null) return ''; const n = Number(String(v).replace(/,/g, '')); need(Number.isFinite(n), 400, `"${col.name}" must be a number`); return n; }
+      if (col.type === 'bool') return v === true || /^(true|yes|y|1|✓)$/i.test(String(v).trim());
+      const s = clean(v, 2000);
+      if (col.type === 'select') { if (!s) return ''; if (!col.options.includes(s)) { need(col.options.length < 50, 400, `"${col.name}": too many options`); col.options.push(s.slice(0, 40)); } return s.slice(0, 40); }
+      return s;
+    };
+    const rowLabel = (t, r) => String(r.cells[t.columns[0]?.id] ?? r.id);
+    const hist = (t, h) => { t.history.push({ at: now(), user, ...h }); if (t.history.length > 500) t.history.splice(0, t.history.length - 500); t.updated_at = now(); };
+    const byName = (t, obj) => { // {"HP": 10} -> {c2: 10}; unknown names are rejected so typos do not silently vanish
+      const cells = {};
+      for (const [k, v] of Object.entries(obj || {})) { const col = t.columns.find((c) => c.id === k || c.name.toLowerCase() === k.toLowerCase()); need(col, 400, `Unknown column "${k}"`); cells[col.id] = cell(col, v); }
+      return cells;
+    };
+    if (parts.length === 1 && method === 'GET') {
+      const list = db.tables.filter((t) => roleIn(me, t.project) && (!pj || t.project === pj) && (!url.searchParams.get('project') || t.project === url.searchParams.get('project')));
+      return sendJson(res, 200, list.map((t) => ({ id: t.id, project: t.project, name: t.name, rows: t.rows.length, columns: t.columns.length, updated_at: t.updated_at })));
+    }
+    if (parts.length === 1 && method === 'POST') {
+      const project = clean(body.project, 60) || pj; forbidIn(me, project, 'dev', 'admin');
+      const name = clean(body.name, 60); need(name, 400, 'Table name required');
+      need(db.tables.filter((t) => t.project === project).length < 60, 409, 'Too many tables');
+      need(!db.tables.some((t) => t.project === project && t.name.toLowerCase() === name.toLowerCase()), 409, 'Table name already used');
+      const t = { id: `t${++db.tseq}`, project, name, columns: [], rows: [], cseq: 0, rseq: 0, history: [], created_at: now(), updated_at: now() };
+      t.columns = cleanCols(t, Array.isArray(body.columns) && body.columns.length ? body.columns : [{ name: 'Name', type: 'text' }]);
+      db.tables.push(t); hist(t, { op: 'create' }); await save();
+      return sendJson(res, 201, t);
+    }
+    const t = tOf(parts[1]);
+    if (parts.length === 2 && method === 'GET') return sendJson(res, 200, t);
+    if (parts[2] === 'export' && method === 'GET') {
+      const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      if (url.searchParams.get('format') === 'json') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="${t.name.replace(/[^\w.-]+/g, '_')}.json"` });
+        return res.end(JSON.stringify(t.rows.map((r) => Object.fromEntries(t.columns.map((c) => [c.name, r.cells[c.id] ?? '']))), null, 2));
+      }
+      res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${t.name.replace(/[^\w.-]+/g, '_')}.csv"` });
+      return res.end('﻿' + [t.columns.map((c) => q(c.name)).join(','), ...t.rows.map((r) => t.columns.map((c) => q(r.cells[c.id] ?? '')).join(','))].join('\r\n'));
+    }
+    forbidIn(me, t.project, 'dev', 'admin');
+    if (parts.length === 2 && method === 'PATCH') {
+      if (body.name !== undefined) {
+        const name = clean(body.name, 60); need(name, 400, 'Table name required');
+        need(!db.tables.some((x) => x !== t && x.project === t.project && x.name.toLowerCase() === name.toLowerCase()), 409, 'Table name already used');
+        t.name = name;
+      }
+      if (body.columns !== undefined) {
+        const before = t.columns; t.columns = cleanCols(t, body.columns);
+        for (const r of t.rows) { // re-coerce existing values when a type changed; drop removed columns
+          const cells = {};
+          for (const c of t.columns) { const old = before.find((b) => b.id === c.id); if (old && r.cells[c.id] !== undefined) { try { cells[c.id] = old.type === c.type ? r.cells[c.id] : cell(c, r.cells[c.id]); } catch { cells[c.id] = ''; } } }
+          r.cells = cells;
+        }
+        hist(t, { op: 'columns' });
+      }
+      t.updated_at = now(); await save();
+      return sendJson(res, 200, t);
+    }
+    if (parts.length === 2 && method === 'DELETE') {
+      forbid(me, 'admin');
+      db.tables = db.tables.filter((x) => x !== t);
+      for (const c of db.cards) if (c.data) c.data = c.data.filter((d) => d.t !== t.id);
+      await save(); return sendJson(res, 200, { ok: true });
+    }
+    if (parts[2] === 'rows' && parts.length === 3 && method === 'POST') {
+      need(t.rows.length < 3000, 409, 'Table is full (3000 rows)');
+      const row = { id: `r${++t.rseq}`, cells: byName(t, body.cells), created_at: now() };
+      t.rows.push(row); hist(t, { op: 'add', row: row.id, label: rowLabel(t, row) }); await save();
+      return sendJson(res, 201, row);
+    }
+    if (parts[2] === 'rows' && parts[3] && method === 'PATCH') {
+      const row = t.rows.find((r) => r.id === parts[3]); need(row, 404, 'Row not found');
+      const cells = byName(t, body.cells); let changed = 0;
+      for (const [cid, v] of Object.entries(cells)) {
+        const from = row.cells[cid] ?? ''; if (from === v) continue;
+        row.cells[cid] = v; changed++;
+        hist(t, { op: 'edit', row: row.id, label: rowLabel(t, row), col: t.columns.find((c) => c.id === cid).name, from, to: v });
+      }
+      if (changed) await save();
+      return sendJson(res, 200, row);
+    }
+    if (parts[2] === 'rows' && parts[3] && method === 'DELETE') {
+      const row = t.rows.find((r) => r.id === parts[3]); need(row, 404, 'Row not found');
+      t.rows = t.rows.filter((r) => r !== row);
+      for (const c of db.cards) if (c.data) c.data = c.data.filter((d) => !(d.t === t.id && d.r === row.id));
+      hist(t, { op: 'delete', row: row.id, label: rowLabel(t, row), from: JSON.stringify(Object.fromEntries(t.columns.map((c) => [c.name, row.cells[c.id] ?? '']))) });
+      await save(); return sendJson(res, 200, { ok: true });
+    }
+    if (parts[2] === 'import' && method === 'POST') { // body: { rows: [{ColumnName: value}], replace?: bool, create_columns?: bool }
+      const rows = Array.isArray(body.rows) ? body.rows : []; need(rows.length > 0 && rows.length <= 2000, 400, 'Send 1-2000 rows');
+      if (body.create_columns) { // add unknown column names as text columns (numbers are detected)
+        const known = new Set(t.columns.map((c) => c.name.toLowerCase()));
+        const add = [];
+        for (const k of Object.keys(rows[0] || {})) if (!known.has(k.toLowerCase())) add.push(k);
+        if (add.length) {
+          const cols = [...t.columns, ...add.map((name) => ({ name, type: rows.every((r) => r[name] === '' || r[name] == null || Number.isFinite(Number(String(r[name]).replace(/,/g, '')))) ? 'number' : 'text' }))];
+          t.columns = cleanCols(t, cols);
+        }
+      }
+      need(body.replace ? true : t.rows.length + rows.length <= 3000, 409, 'Table would exceed 3000 rows');
+      const made = rows.map((r) => ({ id: `r${++t.rseq}`, cells: byName(t, r), created_at: now() }));
+      if (body.replace) t.rows = made; else t.rows.push(...made);
+      hist(t, { op: 'import', label: `${made.length} rows${body.replace ? ' (replaced all)' : ''}` }); await save();
+      return sendJson(res, 200, t);
+    }
+    throw new HttpError(405, 'Method not allowed');
   }
 
   // ---- cards ----
@@ -778,6 +903,15 @@ async function api(req, res, url) {
         other.related = other.related.filter((r) => r !== card.id);
       }
       log(card, user, action === 'link' ? 'linked' : 'unlinked', `#${other.id}`);
+      break;
+    }
+    case 'datalink': case 'dataunlink': { // attach game-data rows (e.g. a monster) to a card
+      const tb = db.tables.find((x) => x.id === String(body.table) && x.project === card.project);
+      need(tb && tb.rows.some((r) => r.id === String(body.row)), 400, 'Data row not found in this project');
+      card.data ||= [];
+      card.data = card.data.filter((d) => !(d.t === tb.id && d.r === String(body.row)));
+      if (action === 'datalink') { need(card.data.length < 30, 409, 'Too many linked rows'); card.data.push({ t: tb.id, r: String(body.row) }); }
+      log(card, user, action === 'datalink' ? 'linked' : 'unlinked', `${tb.name}`);
       break;
     }
     case 'undo': { // take back your own last action (within 5 minutes)

@@ -668,6 +668,7 @@ function showCard(id, keep) {
         ${c.related.some((r) => cards.some((x) => x.id === r)) ? `<div class="meta">${t('related')}</div>${c.related.map((r) => linkRow(r, true, 'related')).join('')}` : ''}
         <div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="linkId" type="number" min="1" placeholder="${t('add_related')}"><button class="btn" data-a="link">${t('link')}</button></div>
         ${canEdit ? `<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="parentId" type="number" min="1" placeholder="${t('set_parent')}"><button class="btn" data-a="setparent">${t('save')}</button></div>` : ''}</div>
+      <div class="sec s-data" id="cardData" hidden></div>
       <div class="actions sideacts2 s-more">${sec.join('')}</div>
       <details class="sec hist s-hist"><summary>${t('history')}</summary>${c.history.map((h) => `<div>${new Date(h.at).toLocaleString(locale())} · ${esc(nameOf(h.user))} · ${esc(t('a_' + h.action))} ${esc(h.text)}</div>`).join('')}</details>
      </aside>
@@ -675,6 +676,7 @@ function showCard(id, keep) {
     <div class="actions foot"><span class="sp"></span><button class="btn" data-a="close">${t('close')}</button></div>`;
   if (draft) $('#cmt').value = draft;
   wireDetail(c);
+  if (typeof renderCardData === 'function') renderCardData(c);
   if (!keep && !$('#viewDlg').open) $('#viewDlg').showModal();
   if (keep) $('#viewDlg').scrollTop = scroll;
   if (location.hash !== `#card-${id}`) history.replaceState(null, '', `#card-${id}`);

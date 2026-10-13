@@ -33,7 +33,7 @@ export function createServer({ base, token, project = '' }) {
       (project ? `This connection is pinned to project "${project}": you only see and change that project's cards. ` : 'The user may belong to several projects; each card shows its project and ref (e.g. ALPHA-12). Use a project-pinned connection (/mcp?project=...) when working inside one game repo. ') +
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
-      'for details (use get_attachment to look at screenshots on the card), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
+      'for details (use get_attachment to look at screenshots on the card; if the card links game data rows or is about balance/stats, read them with list_tables/get_table), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
       'summary and test steps for the tester. Never mark ready if the fix is unfinished. ' +
       'WRITING STYLE for the summary and test_steps: write in THAI, in very simple everyday words, as short as possible, for a tester who is NOT a programmer. ' +
       'No code, file, class or function names: describe what the tester does and sees in the game. One action per step, 3-6 steps, each step like "ทำ... → ควรเห็น: ...". The summary is 1-2 short Thai sentences saying what changed in plain words.',
@@ -128,6 +128,36 @@ export function createServer({ base, token, project = '' }) {
       parent: z.number().int().optional().describe('Parent card id (makes this a sub-card)'),
     },
   }, wrap((a) => call('POST', '/cards', a).then(withRef)));
+
+  // ---- game data tables (balance: monsters, zones, items...) ----
+  const asObj = (t, r) => ({ row: r.id, ...Object.fromEntries(t.columns.map((c) => [c.name, r.cells[c.id] ?? ''])) });
+  server.registerTool('list_tables', {
+    description: 'List the game-data tables (balance sheets such as Monsters, Zones, Items) with row counts. Check these when a card is about balance or stats.',
+    inputSchema: {},
+  }, wrap(() => call('GET', '/tables')));
+
+  server.registerTool('get_table', {
+    description: 'Read a game-data table: columns (name, type) and rows as {row, <ColumnName>: value}. Use `q` to filter rows containing text (any column) and `limit` (default 100).',
+    inputSchema: { table: z.string().describe('Table id from list_tables, e.g. t1'), q: z.string().optional(), limit: z.number().int().min(1).max(500).optional() },
+  }, wrap(async ({ table, q, limit }) => {
+    const t = await call('GET', `/tables/${encodeURIComponent(table)}`);
+    let rows = t.rows.map((r) => asObj(t, r));
+    if (q) rows = rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+    return { id: t.id, name: t.name, columns: t.columns.map((c) => ({ name: c.name, type: c.type, ...(c.options && { options: c.options }) })), total_rows: t.rows.length, rows: rows.slice(0, limit || 100) };
+  }));
+
+  server.registerTool('update_row', {
+    description: 'Change values in one row of a game-data table (dev/admin only). Use column NAMES as keys. Only change balance values when the card/user asks; every change is recorded in the table history under the user.',
+    inputSchema: { table: z.string(), row: z.string().describe('Row id from get_table, e.g. r3'), values: z.record(z.union([z.string(), z.number(), z.boolean()])) },
+  }, wrap(async ({ table, row, values }) => {
+    const r = await call('PATCH', `/tables/${encodeURIComponent(table)}/rows/${encodeURIComponent(row)}`, { cells: values });
+    return { updated: row, cells: r.cells };
+  }));
+
+  server.registerTool('add_row', {
+    description: 'Add a new row (e.g. a new monster) to a game-data table (dev/admin only). Use column NAMES as keys.',
+    inputSchema: { table: z.string(), values: z.record(z.union([z.string(), z.number(), z.boolean()])) },
+  }, wrap(async ({ table, values }) => ({ added: (await call('POST', `/tables/${encodeURIComponent(table)}/rows`, { cells: values })).id })));
 
   server.registerPrompt('do_my_cards', {
     description: 'Fix all cards I claimed and mark them ready to test',
