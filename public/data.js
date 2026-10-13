@@ -10,7 +10,7 @@ Object.assign(I18N.en, {
   data_imp_newcols: 'Create columns that do not exist yet', data_imp_go: 'Import', data_imp_n: '{0} rows ready', data_imp_done: 'Imported {0} rows', data_confirm_replace: 'Replace ALL current rows with the imported ones?',
   data_ro: 'View only', data_no_hist: 'No changes yet', data_linked: 'Game data', data_link_pick: 'Link a row…', data_link_table: 'Table', data_link_row: 'Row', data_link_add: 'Link', data_unlink: 'Unlink',
   data_h_edit: 'changed', data_h_add: 'added', data_h_delete: 'deleted', data_h_import: 'imported', data_h_columns: 'edited columns', data_h_create: 'created the table', data_saved: 'Saved', data_rows_n: '{0} rows',
-  e_dnum: '"{0}" must be a number', e_dtable: 'Table name already used', e_dfull: 'Table is full (3000 rows)',
+  data_other: 'This project has no tables, but other projects do — pick one in the list above.', e_dnum: '"{0}" must be a number', e_dtable: 'Table name already used', e_dfull: 'Table is full (3000 rows)',
 });
 Object.assign(I18N.th, {
   data_title: 'ข้อมูลเกม', data_btn: 'ข้อมูลเกม', data_tables: 'ตาราง', data_new_table: '+ ตารางใหม่', data_prompt_name: 'ชื่อตาราง (เช่น Monsters, Zones, Items):',
@@ -23,11 +23,11 @@ Object.assign(I18N.th, {
   data_imp_newcols: 'สร้างคอลัมน์ที่ยังไม่มีให้อัตโนมัติ', data_imp_go: 'นำเข้า', data_imp_n: 'พร้อมนำเข้า {0} แถว', data_imp_done: 'นำเข้าแล้ว {0} แถว', data_confirm_replace: 'แทนที่ทุกแถวที่มีด้วยข้อมูลที่นำเข้า?',
   data_ro: 'ดูอย่างเดียว', data_no_hist: 'ยังไม่มีการแก้ไข', data_linked: 'ข้อมูลเกม', data_link_pick: 'ลิงก์แถวข้อมูล…', data_link_table: 'ตาราง', data_link_row: 'แถว', data_link_add: 'ลิงก์', data_unlink: 'เลิกลิงก์',
   data_h_edit: 'แก้', data_h_add: 'เพิ่ม', data_h_delete: 'ลบ', data_h_import: 'นำเข้า', data_h_columns: 'แก้คอลัมน์', data_h_create: 'สร้างตาราง', data_saved: 'บันทึกแล้ว', data_rows_n: '{0} แถว',
-  e_dnum: '"{0}" ต้องเป็นตัวเลข', e_dtable: 'ชื่อตารางนี้ถูกใช้แล้ว', e_dfull: 'ตารางเต็ม (3000 แถว)',
+  data_other: 'โปรเจกต์นี้ยังไม่มีตาราง แต่โปรเจกต์อื่นมี — เลือกจากรายการด้านบน', e_dnum: '"{0}" ต้องเป็นตัวเลข', e_dtable: 'ชื่อตารางนี้ถูกใช้แล้ว', e_dfull: 'ตารางเต็ม (3000 แถว)',
 });
 ERRS.push([/^"(.+)" must be a number/, 'e_dnum'], [/^Table name already used/, 'e_dtable'], [/^Table is full/, 'e_dfull']);
 
-const D = { pid: '', list: [], tid: '', tab: null, q: '', sort: null, hi: '', hist: false, busy: false };
+const D = { pid: '', all: [], list: [], tid: '', tab: null, q: '', sort: null, hi: '', hist: false, busy: false };
 const dEdit = () => !!D.pid && rl(D.pid, 'dev', 'admin');
 const dRowName = (tab, r) => String(r.cells[tab.columns[0]?.id] ?? r.id) || r.id;
 const dCache = new Map(); // table id -> {at, tab} for card links
@@ -38,11 +38,13 @@ async function openData(tid, rid) {
   D.pid = D.pid && act.some((p) => p.id === D.pid) ? D.pid : (viewProject || act[0]?.id || projects[0]?.id || '');
   if (tid) { const p = await dGet(tid).catch(() => null); if (p) D.pid = p.project; }
   D.q = ''; D.sort = null; D.hist = false; D.hi = rid || '';
-  await dList(tid);
+  await dList(tid, !viewProject);
   if (!$('#dataDlg').open) $('#dataDlg').showModal();
 }
-async function dList(want) {
-  try { D.list = D.pid ? await api('GET', `/tables?project=${encodeURIComponent(D.pid)}`) : []; } catch (e) { D.list = []; toast(e.message); }
+async function dList(want, auto) {
+  try { D.all = await api('GET', '/tables'); } catch (e) { D.all = []; toast(e.message); }
+  if (auto && !want && !D.all.some((x) => x.project === D.pid) && D.all.length) D.pid = [...D.all].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0].project; // land on a project that has tables
+  D.list = D.all.filter((x) => x.project === D.pid);
   const id = want || (D.list.some((x) => x.id === D.tid) ? D.tid : D.list[0]?.id || '');
   await dSelect(id);
 }
@@ -56,10 +58,10 @@ function dRender() {
   const act = projects.filter((p) => !p.archived || isAdmin());
   const ed = dEdit(), tab = D.tab;
   $('#dataDlg h3').textContent = '🗂 ' + t('data_title');
-  $('#dataSide').innerHTML = `${act.length > 1 ? `<select id="dataProj">${act.map((p) => `<option value="${esc(p.id)}" ${p.id === D.pid ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>` : ''}
+  $('#dataSide').innerHTML = `${act.length > 1 ? `<select id="dataProj">${act.map((p) => `<option value="${esc(p.id)}" ${p.id === D.pid ? 'selected' : ''}>${esc(p.name)} (${D.all.filter((x) => x.project === p.id).length})</option>`).join('')}</select>` : ''}
     <div class="gd-tabs">${D.list.map((x) => `<button class="gd-tab${x.id === D.tid ? ' on' : ''}" data-tid="${esc(x.id)}">${esc(x.name)}<small>${x.rows}</small></button>`).join('')}</div>
     ${ed ? `<button class="btn" id="dataNew">${t('data_new_table')}</button>` : ''}`;
-  if (!tab) { $('#dataMain').innerHTML = `<div class="empty" style="margin:auto">${D.list.length ? t('data_pick') : t('data_no_tables')}</div>`; return dWire(); }
+  if (!tab) { $('#dataMain').innerHTML = `<div class="empty" style="margin:auto">${D.list.length ? t('data_pick') : D.all.length ? t('data_other') : t('data_no_tables')}</div>`; return dWire(); }
   $('#dataMain').innerHTML = `<div class="gd-bar">
       <input id="dataQ" type="search" placeholder="${esc(t('data_search'))}" value="${esc(D.q)}">
       <span class="meta" id="dataCnt"></span><span class="sp"></span>
