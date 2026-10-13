@@ -5,10 +5,22 @@ import { z } from 'zod';
 const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t, null, 2) }] });
 const fail = (e) => ({ isError: true, content: [{ type: 'text', text: `Error: ${e.message}` }] });
 const wrap = (fn) => async (args) => { try { return text(await fn(args)); } catch (e) { return fail(e); } };
+// how often the tester sent a card back, and whether it is waiting for a fix right now (derived from the card history)
+function failInfo(c) {
+  const fails = [], stack = []; let active = false;
+  for (const h of c.history || []) {
+    if (h.action === 'test_failed') { fails.push(h); active = true; }
+    else if (h.action === 'ready_to_test') { stack.push(active); active = false; }
+    else if (h.action === 'complete' || h.action === 'reopened') active = false;
+    else if (h.action === 'undone') { if (h.text === 'test_failed') { fails.pop(); active = false; } else if (h.text === 'ready_to_test') active = stack.pop() ?? false; }
+  }
+  if (c.status === 'complete' || c.status === 'ready_to_test') active = false;
+  return { test_failures: fails.length || undefined, needs_fix: active || undefined, last_test_failure: fails.length ? { reason: fails.at(-1).text, by: fails.at(-1).user, at: fails.at(-1).at } : undefined };
+}
 const brief = (c) => ({
   id: c.id, type: c.type, title: c.title, priority: c.priority, status: c.status,
   assignees: c.assignees, tags: c.tags, due: c.due || undefined, milestone: c.milestone || undefined,
-  parent: c.parent || undefined, attachments: c.files?.length || undefined,
+  parent: c.parent || undefined, attachments: c.files?.length || undefined, ...failInfo(c),
 });
 
 export function createServer({ base, token, project = '' }) {
@@ -68,9 +80,9 @@ export function createServer({ base, token, project = '' }) {
   }));
 
   server.registerTool('get_card', {
-    description: 'Get full details of a card: description, comments (incl. failed-test feedback), history.',
+    description: 'Get full details of a card: description, comments (incl. failed-test feedback), history. `needs_fix: true` + `last_test_failure` mean the tester sent it back: read the reason and fix exactly that before marking ready again; `test_failures` counts how many times it failed.',
     inputSchema: { id: z.number().int() },
-  }, wrap(({ id }) => call('GET', `/cards/${id}`)));
+  }, wrap(async ({ id }) => { const c = await call('GET', `/cards/${id}`); return { ...c, ...failInfo(c) }; }));
 
   server.registerTool('claim_cards', {
     description: 'Mark one or more cards as "I will do this" for the current dev (moves open -> in_progress). A card can have only one owner: cards already claimed by someone else come back with an error and are skipped.',

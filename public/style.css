@@ -349,3 +349,13 @@ table.gd{border-collapse:separate;border-spacing:0;width:max-content;min-width:1
   .gd-wrap{flex-direction:column}#dataSide{width:auto;flex-direction:row;flex-wrap:wrap;overflow:visible}.gd-tabs{flex-direction:row;flex-wrap:wrap}
   #dataDlg .dlg{height:92dvh}.gd-bar input[type=search]{width:100%}
 }
+
+/* ---------- failed-test markers ---------- */
+.pill.fail{color:#ffb4b4;border-color:#6b2a30;background:#2a1215;font-weight:650}
+.pill.retest{color:var(--test);border-color:#3d3360;background:#17142a}
+.failnote{margin:6px 0 2px;padding:6px 9px;border-left:3px solid var(--bad);background:#2a121566;border-radius:0 8px 8px 0;font-size:12.5px;color:#ffc9c9;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.failbox{border:1px solid #6b2a30;border-left:4px solid var(--bad);background:#2a1215;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.failbox b{color:#ffb4b4}.failbox div{white-space:pre-wrap;word-break:break-word}.failbox small{color:var(--mute)}
+.failbox.retest{border-color:#3d3360;background:#17142a}.failbox.retest b{color:var(--test)}
+#failBtn.on{background:#3a1519;border-color:#7a2a31;color:#ffb4b4}
+#failBtn b{background:#3a1519;color:#ffb4b4;border-radius:10px;padding:0 8px;font-size:11px;line-height:18px;margin-left:6px}

@@ -39,6 +39,7 @@ en: {
   sum_cycle: 'Avg time: claim → complete', sum_fail: 'Test fail rate', sum_testers: 'Testers', col_dev: 'Dev', col_ip: 'In progress', col_ready: 'Ready', col_done: 'Done', col_avg: 'Avg time',
   col_tester: 'Tester', passed: 'Passed', failed: 'Failed', none: 'Nothing here 🎉', d: 'd', h: 'h', open_cards: 'Open cards',
   // bell
+  f_failed: 'Test failed', failed_badge: 'Test failed', retest_badge: 'Retest (failed {0}x before)', failed_by: 'Test failed — sent back by {0}', failed_times: 'failed {0} times',
   bell: 'Notifications', no_notif: 'Nothing new', n_mention: '{0} mentioned you on {1}', n_failed: 'Test failed on your card {0}', n_ready: '{0} card(s) waiting to be tested', n_overdue: '{0} of your cards are overdue',
   // history actions
   a_restored: 'restored', a_undone: 'undid', a_created: 'created', a_claimed: 'claimed', a_unclaimed: 'released', a_ready_to_test: 'marked ready to test', a_complete: 'passed (complete)', a_test_failed: 'test failed',
@@ -106,6 +107,7 @@ th: {
   summary: '📊 สรุป', sum_status: 'การ์ดแยกตามสถานะ', sum_devs: 'แยกตาม Dev', sum_stale: 'ค้างเกิน 3 วัน', sum_overdue: 'เลยกำหนด',
   sum_cycle: 'เวลาเฉลี่ย: รับงาน → เสร็จ', sum_fail: 'อัตราเทสไม่ผ่าน', sum_testers: 'Tester', col_dev: 'Dev', col_ip: 'กำลังทำ', col_ready: 'พร้อมเทส', col_done: 'เสร็จ', col_avg: 'เวลาเฉลี่ย',
   col_tester: 'Tester', passed: 'ผ่าน', failed: 'ไม่ผ่าน', none: 'ไม่มีเลย 🎉', d: 'วัน', h: 'ชม.', open_cards: 'การ์ดที่ยังไม่เสร็จ',
+  f_failed: 'เทสไม่ผ่าน', failed_badge: 'เทสไม่ผ่าน', retest_badge: 'เทสซ้ำ (เคยไม่ผ่าน {0} ครั้ง)', failed_by: 'เทสไม่ผ่าน — {0} ส่งกลับ', failed_times: 'ไม่ผ่านแล้ว {0} ครั้ง',
   bell: 'การแจ้งเตือน', no_notif: 'ไม่มีอะไรใหม่', n_mention: '{0} แท็กคุณใน {1}', n_failed: 'เทสไม่ผ่านที่การ์ด {0} ของคุณ', n_ready: 'มี {0} ใบรอเทส', n_overdue: 'การ์ดของคุณเลยกำหนด {0} ใบ',
   a_restored: 'กู้คืนการ์ด', a_undone: 'เลิกทำ', a_created: 'สร้างการ์ด', a_claimed: 'รับงาน', a_unclaimed: 'ปล่อยการ์ด', a_ready_to_test: 'ส่งพร้อมเทส', a_complete: 'เทสผ่าน (เสร็จสิ้น)', a_test_failed: 'เทสไม่ผ่าน',
   a_reopened: 'เปิดใหม่', a_commented: 'คอมเมนต์', a_edited: 'แก้ไข', a_file_added: 'แนบไฟล์', a_file_removed: 'ลบไฟล์', a_linked: 'ลิงก์การ์ด', a_unlinked: 'เลิกลิงก์',

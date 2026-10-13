@@ -5,7 +5,7 @@ const PRI_W = { critical: 0, high: 1, medium: 2, low: 3 };
 const OLD_DONE_MS = 7 * 864e5, STALE_MS = 3 * 864e5;
 
 let cards = [], users = [], user = null, openId = null, lang = 'en';
-const F = { type: '', who: '', q: '', pri: '', tag: '', own: '', ms: '', need: false };
+const F = { type: '', who: '', q: '', pri: '', tag: '', own: '', ms: '', need: false, fail: false };
 const F0 = { ...F };
 let showOld = false, mcol = 'open', dragId = null, sortMode = 'auto', loadedOnce = false;
 try { Object.assign(F, JSON.parse(localStorage.getItem('geckoboard.filters') || '{}')); sortMode = localStorage.getItem('geckoboard.sort') === 'manual' ? 'manual' : 'auto'; } catch { /* storage blocked */ }
@@ -401,8 +401,21 @@ $('#loginForm').addEventListener('submit', async (e) => {
 });
 $('#loginDlg').addEventListener('cancel', (e) => e.preventDefault());
 
+// ---------- test-failure info (derived from the card history) ----------
+function failInfo(c) { // { count: times failed, last: latest failure entry, active: sent back and not yet re-submitted }
+  const fails = [], stack = []; let active = false;
+  for (const h of c.history || []) {
+    if (h.action === 'test_failed') { fails.push(h); active = true; }
+    else if (h.action === 'ready_to_test') { stack.push(active); active = false; }
+    else if (h.action === 'complete' || h.action === 'reopened') active = false;
+    else if (h.action === 'undone') { if (h.text === 'test_failed') { fails.pop(); active = false; } else if (h.text === 'ready_to_test') active = stack.pop() ?? false; }
+  }
+  if (c.status === 'complete' || c.status === 'ready_to_test') active = false;
+  return { count: fails.length, last: fails.at(-1), active };
+}
 // ---------- filters / sorting ----------
 function matches(c) {
+  if (F.fail && !failInfo(c).active) return false;
   if (viewProject && c.project !== viewProject) return false;
   if (F.type && c.type !== F.type) return false;
   if (F.who === 'mine' && !(user && c.assignees.includes(user.email))) return false;
@@ -431,10 +444,13 @@ function renderNeed() {
   const n = cards.filter((c) => (!viewProject || c.project === viewProject) && needsMe(c)).length, b = $('#needBtn');
   const nr = isAdmin() ? 'admin' : rv('tester') && !rv('dev') ? 'tester' : 'dev';
   b.innerHTML = `${t('need_' + nr)}<b>${n}</b>`; b.classList.toggle('on', F.need); b.setAttribute('aria-pressed', F.need);
+  const nf = cards.filter((c) => (!viewProject || c.project === viewProject) && failInfo(c).active).length, fb = $('#failBtn');
+  fb.innerHTML = `❌ ${t('f_failed')}<b>${nf}</b>`; fb.classList.toggle('on', F.fail); fb.setAttribute('aria-pressed', F.fail); fb.hidden = !nf && !F.fail;
   document.title = n ? `(${n}) GeckoBoard` : 'GeckoBoard';
   const sb = $('#sortBtn'); sb.textContent = t('sort_' + sortMode); sb.title = t('sort_tip_' + sortMode); sb.classList.toggle('on', sortMode === 'manual');
 }
 $('#needBtn').onclick = () => { F.need = !F.need; saveF(); renderNeed(); renderBoard(); $('#fclear').hidden = !anyFilter(); };
+$('#failBtn').onclick = () => { F.fail = !F.fail; saveF(); renderNeed(); renderBoard(); $('#fclear').hidden = !anyFilter(); };
 $('#sortBtn').onclick = () => { sortMode = sortMode === 'auto' ? 'manual' : 'auto'; try { localStorage.setItem('geckoboard.sort', sortMode); } catch { /* ignore */ } renderNeed(); renderBoard(); };
 function syncControls() { // reflect restored filters in the UI
   $('#fq').value = F.q;
@@ -492,10 +508,14 @@ function cardHtml(c) {
     c.parent && cards.some((x) => x.id === c.parent) ? `<span class="pill" title="${esc(t('parent_of'))}">↳ ${refOf(cards.find((x) => x.id === c.parent))}</span>` : '', cards.some((x) => x.parent === c.id) ? `<span class="pill">⑂ ${cards.filter((x) => x.parent === c.id).length}</span>` : '',
     c.files.length ? `<span class="pill">📎 ${c.files.length}</span>` : '',
 ].filter(Boolean).join('');
+  const fi = failInfo(c);
+  const failBadge = fi.active ? `<span class="pill fail" title="${esc(fi.last?.text || '')}">❌ ${t('failed_badge')}${fi.count > 1 ? ' ×' + fi.count : ''}</span>` : fi.count && c.status === 'ready_to_test' ? `<span class="pill retest">↻ ${t('retest_badge', fi.count)}</span>` : '';
+  const failNote = fi.active && fi.last ? `<div class="failnote" title="${esc(fi.last.text)}">${esc(fi.last.text)}</div>` : '';
   return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}${flash.has(c.id) ? ' flash' : ''}" data-id="${c.id}" data-pri="${c.priority}" draggable="true">
     <div class="row">${ctl}<span class="cid">${refOf(c)}</span><span class="tag ${c.type}">${c.type}</span>
     <span class="prib pri-${c.priority}">${t('pri_' + c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>
+    ${failBadge || failNote ? `<div class="chiprow" style="margin-top:0">${failBadge}</div>${failNote}` : ''}
     ${c.tags.length ? `<div class="row">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : ''}
     ${chips ? `<div class="chiprow">${chips}</div>` : ''}${claim}</div>`;
 }
@@ -644,6 +664,7 @@ function showCard(id, keep) {
       <span class="status" style="margin-left:auto;color:${stCol};border:1px solid ${stCol}">${t('s_' + c.status)}</span></div>
     <div class="dgrid">
      <div class="dmain">
+      ${(() => { const fi = failInfo(c); return fi.active && fi.last ? `<div class="failbox"><b>❌ ${t('failed_by', nameOf(fi.last.user))}${fi.count > 1 ? ' · ' + t('failed_times', fi.count) : ''}</b><div>${esc(fi.last.text)}</div><small>${new Date(fi.last.at).toLocaleString(locale())}</small></div>` : fi.count && c.status === 'ready_to_test' ? `<div class="failbox retest"><b>↻ ${t('retest_badge', fi.count)}</b></div>` : ''; })()}
       <div class="s-title"><h3>${esc(c.title)}</h3>
         <div class="row">${canEdit ? `<button class="btn" data-a="edit">✎ ${t('edit')}</button>` : ''}<button class="btn" data-a="copytext">${t('copy_text')}</button></div></div>
       ${c.tags.length || c.due || c.milestone ? `<div class="chiprow s-chips" style="margin:0">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}${dueChip(c)}${c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : ''}</div>` : ''}
