@@ -45,7 +45,7 @@ function toast(m, action, ms) { // optional action = { label, fn }: shows a butt
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms || (action ? 8000 : 3800));
 }
 function hideToast() { $('#toast').style.display = 'none'; }
-const ERRS = [[/^Not logged in/, 'e_login'], [/^Role "(.+)" is not allowed/, 'e_role'], [/^Card #(\d+) not found/, 'e_nocard'], [/^Already claimed by (.+?)\.?$/, 'e_claimed'], [/^Card already complete/, 'e_complete'],
+const ERRS = [[/^Project is not empty/, 'e_pnotempty'], [/^Project required/, 'e_pneed'], [/^Not logged in/, 'e_login'], [/^Role "(.+)" is not allowed/, 'e_role'], [/^Card #(\d+) not found/, 'e_nocard'], [/^Already claimed by (.+?)\.?$/, 'e_claimed'], [/^Card already complete/, 'e_complete'],
   [/^Not your card/, 'e_notyours'], [/^Only an assignee/, 'e_assignee'], [/^Card must be in progress/, 'e_inprog'], [/^test_steps required/, 'e_steps'], [/^Card is not ready to test/, 'e_notready'], [/^reason required/, 'e_reason'],
   [/^text required/, 'e_text'], [/^title required/, 'e_title'], [/^Only the reporter, the owner/, 'e_edit'], [/^File too large \(max (\d+) MB\)/, 'e_toolarge'], [/^Only PNG\/JPEG/, 'e_filetype'], [/^Max (\d+) files per card/, 'e_maxfiles'],
   [/^Empty file/, 'e_empty'], [/^File not found/, 'e_nofile'], [/recycled/i, 'e_recycled'], [/^A card cannot be its own parent/, 'e_selfparent'], [/^Invalid date/, 'e_date'], [/^Parent card #(\d+) not found/, 'e_noparent'],
@@ -337,7 +337,8 @@ async function renderProjects() {
         ${people.map((u) => `<div class="mrow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span><select data-m="${esc(u.email)}"><option value="">${t('proj_none')}</option><option value="dev" ${p.members?.[u.email] === 'dev' ? 'selected' : ''}>dev</option><option value="tester" ${p.members?.[u.email] === 'tester' ? 'selected' : ''}>tester</option></select></div>`).join('')}
         ${users.filter((u) => u.role === 'admin').map((u) => `<div class="mrow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span><span class="meta">${t('proj_admin_all')}</span></div>`).join('')}</div>
       <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="archived" ${p.archived ? 'checked' : ''} style="width:auto"> ${t('proj_archive')}</label><div class="err" id="pErr"></div>
-      <div class="actions"><button type="button" class="btn" id="pBack">${t('proj_back')}</button><span class="sp"></span><button class="btn primary">${t('proj_save')}</button></div></form>`;
+      <div class="actions"><button type="button" class="btn" id="pBack">${t('proj_back')}</button><button type="button" class="btn danger" id="pDel">${t('proj_delete')}</button><span class="sp"></span><button class="btn primary">${t('proj_save')}</button></div></form>`;
+    $('#pDel').onclick = async () => { if (!confirm(t('proj_confirm_delete', p.name))) return; try { await api('DELETE', `/projects/${p.id}`); await load(true); projEdit = null; await renderProjects(); } catch (er) { $('#pErr').textContent = er.message; } };
     $('#pBack').onclick = () => { projEdit = null; renderProjects(); };
     $('#pEditForm').onsubmit = async (e) => {
       e.preventDefault(); const f = e.target;

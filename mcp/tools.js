@@ -12,6 +12,8 @@ const brief = (c) => ({
 });
 
 export function createServer({ base, token, project = '' }) {
+  // When this connection is not pinned to one project and the user has several, never guess where something goes: make Claude ask first.
+  const ASK = 'This connection is not pinned to a project and the user belongs to several. Do NOT guess: ask the user which project (and confirm what you are about to create) before calling this again with `project`.';
   async function call(method, path, body) {
     const res = await fetch(base.replace(/\/$/, '') + '/api' + path, {
       method,
@@ -31,6 +33,7 @@ export function createServer({ base, token, project = '' }) {
   const server = new McpServer({ name: 'geckoboard', version: '1.0.0' }, {
     instructions:
       (project ? `This connection is pinned to project "${project}": you only see and change that project's cards. ` : 'The user may belong to several projects; each card shows its project and ref (e.g. ALPHA-12). Use a project-pinned connection (/mcp?project=...) when working inside one game repo. ') +
+      'IMPORTANT: if you are unsure which project, table or card something belongs to, or what the user wants changed, ASK the user before creating or changing anything. Never guess a project. ' +
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
       'for details (use get_attachment to look at screenshots on the card; if the card links game data rows or is about balance/stats, read them with list_tables/get_table), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
@@ -126,8 +129,12 @@ export function createServer({ base, token, project = '' }) {
       due: z.string().optional().describe('YYYY-MM-DD'),
       milestone: z.string().optional(),
       parent: z.number().int().optional().describe('Parent card id (makes this a sub-card)'),
+      project: z.string().optional().describe('Project id. ASK the user if unsure; required when the connection is not pinned and the user has several projects'),
     },
-  }, wrap((a) => call('POST', '/cards', a).then(withRef)));
+  }, wrap(async (a) => {
+    if (!project && !a.project && (await call('GET', '/me')).projects.filter((p) => !p.archived).length > 1) throw new Error(ASK + ' Projects: ' + JSON.stringify((await call('GET', '/me')).projects.map((p) => ({ id: p.id, name: p.name }))));
+    return withRef(await call('POST', '/cards', a));
+  }));
 
   // ---- game data tables (balance: monsters, zones, items...) ----
   const asObj = (t, r) => ({ row: r.id, ...Object.fromEntries(t.columns.map((c) => [c.name, r.cells[c.id] ?? ''])) });
@@ -167,6 +174,7 @@ export function createServer({ base, token, project = '' }) {
       columns: z.array(z.object({ name: z.string(), type: z.enum(['text', 'number', 'select', 'bool']).optional(), options: z.array(z.string()).optional() })).min(1),
     },
   }, wrap(async ({ name, project: p, columns }) => {
+    if (!project && !p && (await call('GET', '/me')).projects.filter((x) => !x.archived).length > 1) throw new Error(ASK + ' Projects: ' + JSON.stringify((await call('GET', '/me')).projects.map((x) => ({ id: x.id, name: x.name }))));
     const t = await call('POST', '/tables', { name, project: p || project || undefined, columns });
     return { id: t.id, name: t.name, columns: t.columns.map((c) => c.name) };
   }));

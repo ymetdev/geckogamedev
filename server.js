@@ -543,6 +543,11 @@ async function api(req, res, url) {
       if (body.archived !== undefined) { need(!(body.archived && db.projects.filter((x) => !x.archived).length <= 1 && !p.archived), 409, 'Keep at least one active project'); p.archived = !!body.archived; }
       await save(); return sendJson(res, 200, p);
     }
+    if (method === 'DELETE' && parts.length === 2) { // only an EMPTY project can be deleted (otherwise archive it)
+      need(!db.cards.some((c) => c.project === p.id) && !db.trash.some((c) => c.project === p.id) && !db.tables.some((x) => x.project === p.id), 409, 'Project is not empty: move or delete its cards and tables first (or archive it)');
+      need(db.projects.length > 1 && db.projects.some((x) => x !== p && !x.archived), 409, 'Keep at least one active project');
+      db.projects = db.projects.filter((x) => x !== p); await save(); return sendJson(res, 200, { ok: true });
+    }
     if (method === 'PUT' && parts[2] === 'members') { // body.members = { email: 'dev' | 'tester' | null }
       for (const [email, r] of Object.entries(body.members || {})) {
         if (!db.users.some((u) => u.email === email)) continue;
@@ -661,7 +666,9 @@ async function api(req, res, url) {
       return sendJson(res, 200, list.map((t) => ({ id: t.id, project: t.project, name: t.name, rows: t.rows.length, columns: t.columns.length, updated_at: t.updated_at })));
     }
     if (parts.length === 1 && method === 'POST') {
-      const project = clean(body.project, 60) || pj; forbidIn(me, project, 'dev', 'admin');
+      const mineActive = myProjects(me).filter((x) => !x.archived);
+      need(clean(body.project, 60) || pj || mineActive.length <= 1, 400, `Project required: ask the user which project. Options: ${mineActive.map((x) => `${x.id} (${x.name})`).join(', ')}`);
+      const project = clean(body.project, 60) || pj || mineActive[0]?.id; forbidIn(me, project, 'dev', 'admin');
       const name = clean(body.name, 60); need(name, 400, 'Table name required');
       need(db.tables.filter((t) => t.project === project).length < 60, 409, 'Too many tables');
       need(!db.tables.some((t) => t.project === project && t.name.toLowerCase() === name.toLowerCase()), 409, 'Table name already used');
@@ -764,7 +771,9 @@ async function api(req, res, url) {
   if (parts[0] === 'cards' && parts.length === 1 && method === 'POST') {
     const title = clean(body.title, 200);
     need(title, 400, 'title required');
-    const pid = clean(body.project, 60) || pj || myProjects(me).find((x) => !x.archived)?.id;
+    const mineActive = myProjects(me).filter((x) => !x.archived);
+    need(clean(body.project, 60) || pj || mineActive.length <= 1, 400, `Project required: ask the user which project. Options: ${mineActive.map((x) => `${x.id} (${x.name})`).join(', ')}`);
+    const pid = clean(body.project, 60) || pj || mineActive[0]?.id;
     need(pid && roleIn(me, pid), 403, 'Pick a project you belong to');
     const dup = db.cards.find((c) => c.project === pid && c.reporter === user && c.title === title && Date.now() - Date.parse(c.created_at) < 15000); // double-click / retry safety net
     if (dup) return sendJson(res, 200, dup);
