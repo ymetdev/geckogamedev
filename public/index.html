@@ -17,6 +17,7 @@
 <body>
 <header class="appbar">
   <div class="brand"><span class="logo">🦎</span><span class="brand-name">GeckoBoard</span></div>
+  <select id="projSel" class="projsel" hidden aria-label="Project"></select>
   <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="fq" type="search" data-i18n-ph="search_ph" title="/" autocomplete="off"></div>
   <button class="btn need" id="needBtn" aria-pressed="false"></button>
   <span class="sp mobsp"></span>
@@ -53,6 +54,7 @@
 <dialog id="cardDlg"><form class="dlg" method="dialog" id="cardForm">
   <h3 id="cardDlgTitle"></h3>
   <div class="draftbar" id="draftBar" hidden><span data-i18n="draft_restored"></span><button type="button" class="btn" id="draftFresh" data-i18n="draft_fresh"></button></div>
+  <label id="projRow"><span data-i18n="project"></span><select name="project"></select></label>
   <div class="row">
     <label style="flex:1"><span data-i18n="type"></span><select name="type"><option value="ticket" data-i18n="ticket_opt"></option><option value="task" data-i18n="task_opt"></option></select></label>
     <label style="flex:1"><span data-i18n="priority"></span><select name="priority"><option value="low" data-i18n="pri_low"></option><option value="medium" selected data-i18n="pri_medium"></option><option value="high" data-i18n="pri_high"></option><option value="critical" data-i18n="pri_critical"></option></select></label>
@@ -102,6 +104,8 @@
 <dialog id="tokenDlg"><div class="dlg">
   <h3 data-i18n="token_title"></h3>
   <div class="meta" data-i18n="token_note"></div>
+  <label><span data-i18n="tok_project"></span><select id="tokProj"></select></label>
+  <div class="meta" id="tokNote"></div>
   <div class="box" id="tokenCmd" style="user-select:all;font-family:monospace;font-size:12px;word-break:break-all"></div>
   <div class="meta" data-i18n="token_after"></div>
   <details class="sec" style="margin-top:4px"><summary class="meta" data-i18n="no_cli" style="cursor:pointer"></summary>
@@ -165,6 +169,12 @@
       <li>กดปุ่ม <b>↕</b> เพื่อสลับระหว่างเรียงอัตโนมัติ (ความสำคัญ → วันกำหนด) กับ <b>เรียงเอง</b> ลากการ์ดสลับลำดับในคอลัมน์ได้ ทุกคนเห็นลำดับเดียวกัน</li>
       <li>บอร์ดอัปเดตสดเมื่อมีคนเปลี่ยน การ์ดที่เปลี่ยนจะเรืองแสงสั้นๆ</li>
       <li><b>ติดตั้งเป็นแอป</b>: Android/PC ใช้เมนูชื่อ → ติดตั้งเป็นแอป (หรือไอคอนติดตั้งที่แถบที่อยู่) · iPhone ใช้ Safari → ปุ่มแชร์ → เพิ่มไปยังหน้าจอโฮม</li></ul></details>
+    <details><summary>หลายโปรเจกต์</summary><ul>
+      <li>ตัวสลับโปรเจกต์อยู่แถบบน (ถ้าคุณอยู่โปรเจกต์เดียวจะไม่แสดง) เลือก <b>ทุกโปรเจกต์</b> เพื่อดูรวม</li>
+      <li>เลขการ์ดแยกต่อโปรเจกต์ เช่น <code>ALPHA-12</code> พิมพ์ <code>12</code> หรือ <code>alpha-12</code> ในช่องค้นหาได้</li>
+      <li>ในแต่ละโปรเจกต์คุณมี role ไม่เหมือนกันได้ (เป็น dev ที่ A แต่เป็น tester ที่ B)</li>
+      <li>เชื่อม Claude: ที่เมนู Connect Claude เลือกโปรเจกต์ แล้วรันคำสั่งใน repo เกมของโปรเจกต์นั้น Claude จะเห็นเฉพาะการ์ดโปรเจกต์นั้น</li>
+      <li>admin: เมนูชื่อ → <b>โปรเจกต์</b> เพื่อสร้างโปรเจกต์ ตั้งสมาชิก/role ช่อง Discord และ role ผู้เทสของแต่ละโปรเจกต์</li></ul></details>
     <details><summary>Role ทำอะไรได้บ้าง</summary><ul>
       <li><b>dev</b>: สร้าง/ลบการ์ด รับ/ปล่อยการ์ด ส่งพร้อมเทส (เอง หรือผ่าน Claude)</li>
       <li><b>tester</b>: ผ่าน / ไม่ผ่าน / เปิดใหม่</li>
@@ -222,6 +232,12 @@
       <li>Use the <b>↕</b> button to switch between automatic order (priority → due date) and <b>manual order</b>: drag cards up and down in a column; everyone sees the same order</li>
       <li>The board updates live when someone changes something; changed cards glow briefly</li>
       <li><b>Install as an app</b>: Android/PC use your name menu → Install app (or the install icon in the address bar) · iPhone: Safari → Share → Add to Home Screen</li></ul></details>
+    <details><summary>Multiple projects</summary><ul>
+      <li>The project switcher is in the top bar (hidden if you only belong to one). Pick <b>All projects</b> for a combined view</li>
+      <li>Card numbers are per project, e.g. <code>ALPHA-12</code>. Type <code>12</code> or <code>alpha-12</code> in search</li>
+      <li>Your role can differ per project (dev in A, tester in B)</li>
+      <li>Connect Claude: pick the project in the Connect Claude dialog and run the command inside that project's game repo. Claude will only see that project's cards</li>
+      <li>Admins: your name menu → <b>Projects</b> to create projects and set members/roles, the Discord channel and the tester role per project</li></ul></details>
     <details><summary>What can each role do?</summary><ul>
       <li><b>dev</b>: create/delete cards, claim/release, send to Ready to Test (by hand or via Claude)</li>
       <li><b>tester</b>: Pass / Fail / Reopen</li>
@@ -251,6 +267,8 @@
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
 <dialog id="sumDlg"><div class="dlg"><h3 data-i18n="summary"></h3><div id="sumBody" class="help" style="max-height:72vh"></div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#sumDlg').close()" data-i18n="close"></button></div></div></dialog>
+<dialog id="projDlg"><div class="dlg"><h3 data-i18n="projects_title"></h3><div id="projBody" style="display:flex;flex-direction:column;gap:12px"></div>
+  <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#projDlg').close()" data-i18n="close"></button></div></div></dialog>
 <dialog id="bkDlg"><div class="dlg"><h3 data-i18n="bk_title"></h3>
   <div class="meta" data-i18n="bk_note"></div>
   <div class="row"><a class="btn" id="bkJson" href="/api/export?format=json" download data-i18n="bk_json"></a><a class="btn" id="bkCsv" href="/api/export?format=csv" download data-i18n="bk_csv"></a><button class="btn primary" id="bkNow" data-i18n="bk_now"></button></div>

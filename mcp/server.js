@@ -8,4 +8,5 @@ const base = process.env.GECKOBOARD_URL || process.env.DEVBOARD_URL || 'http://l
 const token = process.env.GECKOBOARD_TOKEN || process.env.DEVBOARD_TOKEN || '';
 if (!token) { console.error('GECKOBOARD_TOKEN is required (copy it from the web app profile menu)'); process.exit(1); }
 
-await createServer({ base, token }).connect(new StdioServerTransport());
+const project = process.env.GECKOBOARD_PROJECT || '';
+await createServer({ base, token, project }).connect(new StdioServerTransport());

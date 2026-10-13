@@ -18,7 +18,18 @@ try { lang = localStorage.getItem('geckoboard.lang') || (/^th/i.test(navigator.l
 const t = (k, ...a) => String(I18N[lang][k] ?? I18N.en[k] ?? k).replace(/\{(\d)\}/g, (_, i) => a[i]);
 const locale = () => (lang === 'th' ? 'th-TH' : 'en-GB');
 const nameOf = (e) => users.find((u) => u.email === e)?.name || e;
-const role = (...r) => !!user && r.includes(user.role);
+let projects = [], viewProject = '';
+try { viewProject = localStorage.getItem('geckoboard.project') || ''; } catch { /* storage blocked */ }
+const PROJ = (id) => projects.find((p) => p.id === id);
+const roleOf = (pid) => (user?.role === 'admin' ? 'admin' : PROJ(pid)?.role || null); // my role inside one project
+const rl = (pid, ...r) => r.includes(roleOf(pid));
+const activeProjects = () => projects.filter((p) => !p.archived);
+const curPid = () => viewProject || activeProjects()[0]?.id || projects[0]?.id || '';
+const role = (...r) => rl(curPid(), ...r); // role in the project being viewed
+const rv = (...r) => (viewProject ? rl(viewProject, ...r) : projects.some((p) => r.includes(roleOf(p.id)))); // "in the view" (any project when viewing all)
+const refOf = (c) => `${PROJ(c.project)?.key || '?'}-${c.num ?? c.id}`;
+const isAdmin = () => user?.role === 'admin';
+const vcards = () => (viewProject ? cards.filter((c) => c.project === viewProject) : cards); // cards of the project being viewed
 const hue = (e) => { let h = 0; for (const ch of String(e)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
 const avatar = (e, cls = '') => `<span class="av ${cls}" style="background:hsl(${hue(e)} 45% 40%)">${esc([...nameOf(e)][0]?.toUpperCase() || '?')}</span>`;
 const LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -140,7 +151,8 @@ async function doLoad(force) {
   if (st.unchanged) return;
   const sig = () => (openId ? JSON.stringify(cards.find((c) => c.id === openId)) : '');
   const before = sig(), old = new Map(cards.map((c) => [c.id, c]));
-  rev = st.rev; cards = st.cards; users = st.users;
+  rev = st.rev; cards = st.cards; users = st.users; projects = st.projects || projects;
+  renderProjectSwitch();
   announce(old);
   loadedOnce = true;
   renderAll(); bootHide();
@@ -149,6 +161,18 @@ async function doLoad(force) {
     else if (sig() !== before && !typingInDetail()) showCard(openId, true); // keeps videos playing and inputs focused
   }
 }
+function renderProjectSwitch() { // project picker in the app bar (hidden when you only have one project)
+  const sel = $('#projSel'), list = projects.filter((p) => !p.archived || isAdmin());
+  if (viewProject && !projects.some((p) => p.id === viewProject)) viewProject = '';
+  if (activeProjects().length === 1 && !isAdmin()) viewProject = activeProjects()[0].id;
+  sel.hidden = list.length <= 1;
+  const opts = [...(list.length > 1 ? [['', t('all_projects')]] : []), ...list.map((p) => [p.id, `${p.name}${p.archived ? ' · ' + t('archived') : ''}`])];
+  sel.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(''); sel.value = viewProject;
+}
+$('#projSel').onchange = () => {
+  viewProject = $('#projSel').value; try { localStorage.setItem('geckoboard.project', viewProject); } catch { /* ignore */ }
+  renderUserBox(); renderAll();
+};
 function announce(old) { // glow the cards other people changed, and say what happened
   if (!loadedOnce) return;
   const msgs = [];
@@ -156,7 +180,7 @@ function announce(old) { // glow the cards other people changed, and say what ha
     const prev = old.get(c.id); if (prev && prev.updated_at === c.updated_at && prev.status === c.status) continue;
     const last = c.history.at(-1); if (!last || last.user === user.email) continue; // my own actions need no highlight
     flash.add(c.id); setTimeout(() => { flash.delete(c.id); $(`.card[data-id="${c.id}"]`)?.classList.remove('flash'); }, 2600); // each card's glow ends on its own clock
-    if (msgs.length < 2) msgs.push(`${nameOf(last.user)} · #${c.id} ${t('a_' + last.action)}`);
+    if (msgs.length < 2) msgs.push(`${nameOf(last.user)} · ${refOf(c)} ${t('a_' + last.action)}`);
   }
   if (msgs.length) toast(msgs.join('  |  '));
 }
@@ -187,27 +211,39 @@ $$('#langSeg button,[data-langseg] button').forEach((b) => (b.onclick = () => se
 function showLogin() { bootHide(); user = null; stopEvents(); $('#userBox').innerHTML = ''; if (!$('#loginDlg').open) $('#loginDlg').showModal(); initLogin(); }
 function renderUserBox() {
   const u = user;
-  $('#userBox').innerHTML = `<div class="chip" id="chip" role="button" tabindex="0" aria-label="${esc(u.name)}"><span class="av" style="background:hsl(${hue(u.email)} 45% 40%)">${esc([...u.name][0]?.toUpperCase() || '?')}</span><span>${esc(u.name)}</span><span class="role ${u.role}">${u.role}</span></div>
+  $('#userBox').innerHTML = `<div class="chip" id="chip" role="button" tabindex="0" aria-label="${esc(u.name)}"><span class="av" style="background:hsl(${hue(u.email)} 45% 40%)">${esc([...u.name][0]?.toUpperCase() || '?')}</span><span>${esc(u.name)}</span><span class="role ${roleOf(curPid()) || u.role}">${roleOf(curPid()) || u.role}</span></div>
    <div class="menu" id="menu">
      <button data-m="token">${t('menu_token')}</button>
-     ${u.role === 'admin' ? `<button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button><button data-m="backup">${t('menu_backup')}</button>` : ''}
+     ${u.role === 'admin' ? `<button data-m="projects">${t('menu_projects')}</button><button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button><button data-m="backup">${t('menu_backup')}</button>` : ''}
      ${installEvt ? `<button data-m="install">📲 ${t('menu_install')}</button>` : ''}
      <button data-m="out">${t('menu_out')}</button></div>`;
   $('#chip').onclick = (e) => { e.stopPropagation(); $('#menu').classList.toggle('show'); };
   $$('#menu button').forEach((b) => (b.onclick = () => menuAct(b.dataset.m)));
 }
 function setUser(u) {
-  user = u; $('#loginDlg').close();
+  user = u; projects = u.projects || []; renderProjectSwitch(); $('#loginDlg').close();
   if (window.__showHelp) { window.__showHelp = false; $('#helpBtn').click(); }
   renderUserBox(); startEvents();
   load(true).then(openFromHash);
 }
 document.addEventListener('click', (e) => { $('#menu')?.classList.remove('show'); if (!e.target.closest('.bellbox')) $('#bellMenu').classList.remove('show'); });
-const mcpCmd = (tok) => `claude mcp add --scope user --transport http geckoboard ${location.origin}/mcp --header "Authorization: Bearer ${tok}"`;
-function showToken(tok) {
-  $('#tokenCmd').textContent = mcpCmd(tok);
-  $('#tokenJson').textContent = JSON.stringify({ mcpServers: { geckoboard: { type: 'http', url: location.origin + '/mcp', headers: { Authorization: 'Bearer ' + tok } } } }, null, 2);
+let lastTok = '';
+const mcpUrl = (pid) => `${location.origin}/mcp${pid ? `?project=${encodeURIComponent(pid)}` : ''}`;
+// one game repo -> pin it to its project (local scope = only that folder); no project -> all your projects (user scope)
+const mcpCmd = (tok, pid) => `claude mcp add --scope ${pid ? 'local' : 'user'} --transport http geckoboard ${mcpUrl(pid)} --header "Authorization: Bearer ${tok}"`;
+function showToken(tok, fresh) {
+  lastTok = tok; const sel = $('#tokProj');
+  if (fresh || !sel.options.length) {
+    sel.innerHTML = [['', t('all_projects')], ...activeProjects().map((p) => [p.id, `${p.name} (${p.key})`])].map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
+    sel.value = activeProjects().some((p) => p.id === viewProject) ? viewProject : '';
+  }
+  sel.closest('label').hidden = activeProjects().length <= 1; if (activeProjects().length <= 1) sel.value = activeProjects()[0]?.id || '';
+  const pid = sel.value;
+  $('#tokNote').textContent = activeProjects().length > 1 ? t(pid ? 'tok_note_one' : 'tok_note_all') : '';
+  $('#tokenCmd').textContent = mcpCmd(tok, pid);
+  $('#tokenJson').textContent = JSON.stringify({ mcpServers: { geckoboard: { type: 'http', url: mcpUrl(pid), headers: { Authorization: 'Bearer ' + tok } } } }, null, 2);
 }
+$('#tokProj').onchange = () => showToken(lastTok);
 async function copyText(text, btn, key = 'copy') {
   try { await navigator.clipboard.writeText(text); btn.textContent = t('copied'); } catch { toast('Copy failed'); }
   setTimeout(() => (btn.textContent = t(key)), 1500);
@@ -217,7 +253,8 @@ $('#copyJsonBtn').onclick = () => copyText($('#tokenJson').textContent, $('#copy
 $('#rotateBtn').onclick = () => { if (!confirm(t('confirm_rotate'))) return; withBusy($('#rotateBtn'), async () => { try { showToken((await api('POST', '/me/rotate-token', {})).token); } catch (e) { alert(e.message); } }); };
 async function menuAct(m) {
   if (m === 'out') { await api('POST', '/logout', {}); showLogin(); }
-  if (m === 'token') { const me = await api('GET', '/me'); showToken(me.token); $('#tokenDlg').showModal(); }
+  if (m === 'token') { const me = await api('GET', '/me'); showToken(me.token, true); $('#tokenDlg').showModal(); }
+  if (m === 'projects') { projEdit = null; await renderProjects(); $('#projDlg').showModal(); }
   if (m === 'team') { renderTeam(); $('#teamDlg').showModal(); }
   if (m === 'storage') { await renderStorage(); $('#storDlg').showModal(); }
   if (m === 'backup') { await renderBackups(); $('#bkDlg').showModal(); }
@@ -239,7 +276,7 @@ function renderTeam() {
 $('#addUserForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   await withBusy(e.target, async () => {
-    try { await api('POST', '/users', Object.fromEntries(new FormData(e.target))); e.target.reset(); $('#teamErr').textContent = ''; await load(); renderTeam(); } catch (err) { $('#teamErr').textContent = err.message; }
+    try { await api('POST', '/users', { ...Object.fromEntries(new FormData(e.target)), project: curPid() }); e.target.reset(); $('#teamErr').textContent = ''; await load(); renderTeam(); } catch (err) { $('#teamErr').textContent = err.message; }
   }, e.target.querySelector('button.primary'));
 });
 const fmtB = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.round(n / 1e3) + ' KB');
@@ -253,6 +290,55 @@ async function renderStorage() {
 $('#storClean').onclick = () => withBusy($('#storClean'), async () => {
   try { const r = await api('POST', '/storage/recycle', {}); await renderStorage(); await load(); toast(r.purged ? t('cleaned', fmtB(r.freed)) : t('nothing_to_clean')); } catch (e) { toast(e.message); }
 });
+// ---------- projects (admin) ----------
+let projEdit = null; // null = list, 'new' = create form, <id> = editing that project
+async function renderProjects() {
+  const list = await api('GET', '/projects'); const body = $('#projBody'); $('#projDlg .err')?.remove();
+  const people = users.filter((u) => u.role !== 'admin');
+  if (projEdit === 'new') {
+    body.innerHTML = `<form id="pNewForm" class="dlg" style="padding:0"><label><span>${t('proj_name')}</span><input name="name" required maxlength="60"></label>
+      <label><span>${t('proj_key')}</span><input name="key" maxlength="8" placeholder="ALPHA" style="text-transform:uppercase"></label>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="copy" checked style="width:auto"> ${t('proj_copy')}</label><div class="err" id="pErr"></div>
+      <div class="actions"><button type="button" class="btn" id="pBack">${t('proj_back')}</button><span class="sp"></span><button class="btn primary">${t('proj_create')}</button></div></form>`;
+    $('#pBack').onclick = () => { projEdit = null; renderProjects(); };
+    $('#pNewForm').onsubmit = async (e) => {
+      e.preventDefault(); const f = e.target;
+      await withBusy(f, async () => { try { const p = await api('POST', '/projects', { name: f.name.value, key: f.key.value, copy_members_from: f.copy.checked ? curPid() : '' }); await load(true); projEdit = p.id; await renderProjects(); } catch (er) { $('#pErr').textContent = er.message; } }, f.querySelector('button.primary'));
+    };
+    return;
+  }
+  if (projEdit) {
+    const p = list.find((x) => x.id === projEdit); if (!p) { projEdit = null; return renderProjects(); }
+    body.innerHTML = `<form id="pEditForm" class="dlg" style="padding:0">
+      <div class="row" style="flex-wrap:nowrap"><label style="flex:2"><span>${t('proj_name')}</span><input name="name" value="${esc(p.name)}" required maxlength="60"></label><label style="flex:1"><span>${t('proj_key')}</span><input name="key" value="${esc(p.key)}" maxlength="8" style="text-transform:uppercase"></label></div>
+      <label><span>${t('proj_webhook')}</span><input name="discord_webhook" value="${esc(p.discord_webhook || '')}" placeholder="https://discord.com/api/webhooks/…"></label><div class="meta">${t('proj_hook_hint')}</div>
+      <label><span>${t('proj_role')}</span><input name="discord_tester_role" value="${esc(p.discord_tester_role || '')}" inputmode="numeric"></label>
+      <div class="sec"><h4>${t('proj_members')}</h4>
+        ${people.map((u) => `<div class="mrow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span><select data-m="${esc(u.email)}"><option value="">${t('proj_none')}</option><option value="dev" ${p.members?.[u.email] === 'dev' ? 'selected' : ''}>dev</option><option value="tester" ${p.members?.[u.email] === 'tester' ? 'selected' : ''}>tester</option></select></div>`).join('')}
+        ${users.filter((u) => u.role === 'admin').map((u) => `<div class="mrow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span><span class="meta">${t('proj_admin_all')}</span></div>`).join('')}</div>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="archived" ${p.archived ? 'checked' : ''} style="width:auto"> ${t('proj_archive')}</label><div class="err" id="pErr"></div>
+      <div class="actions"><button type="button" class="btn" id="pBack">${t('proj_back')}</button><span class="sp"></span><button class="btn primary">${t('proj_save')}</button></div></form>`;
+    $('#pBack').onclick = () => { projEdit = null; renderProjects(); };
+    $('#pEditForm').onsubmit = async (e) => {
+      e.preventDefault(); const f = e.target;
+      await withBusy(f, async () => {
+        try {
+          const members = Object.fromEntries($$('#pEditForm select[data-m]').map((x) => [x.dataset.m, x.value || null]));
+          await api('PATCH', `/projects/${p.id}`, { name: f.name.value, key: f.key.value, discord_webhook: f.discord_webhook.value, discord_tester_role: f.discord_tester_role.value, archived: f.archived.checked });
+          await api('PUT', `/projects/${p.id}/members`, { members });
+          await load(true); toast(t('proj_saved')); projEdit = null; await renderProjects();
+        } catch (er) { $('#pErr').textContent = er.message; }
+      }, f.querySelector('button.primary'));
+    };
+    return;
+  }
+  body.innerHTML = list.map((p) => `<div class="prow"><div style="flex:1;min-width:0"><b>${esc(p.name)}</b><span class="keybadge">${esc(p.key)}</span>${p.archived ? `<span class="pill" style="margin-left:6px">${t('archived')}</span>` : ''}
+      <span class="meta">${t('proj_cards', p.cards)} · ${t('proj_members_n', Object.keys(p.members || {}).length)}</span></div><button class="btn" data-pe="${esc(p.id)}">${t('proj_edit')}</button></div>`).join('')
+    + `<button class="btn primary" id="pNew">${t('proj_new')}</button>`;
+  $$('#projBody [data-pe]').forEach((b) => (b.onclick = () => { projEdit = b.dataset.pe; renderProjects(); }));
+  $('#pNew').onclick = () => { projEdit = 'new'; renderProjects(); };
+}
+
 // ---------- export & backups (admin) ----------
 async function renderBackups() {
   const list = await api('GET', '/backups');
@@ -296,6 +382,7 @@ $('#loginDlg').addEventListener('cancel', (e) => e.preventDefault());
 
 // ---------- filters / sorting ----------
 function matches(c) {
+  if (viewProject && c.project !== viewProject) return false;
   if (F.type && c.type !== F.type) return false;
   if (F.who === 'mine' && !(user && c.assignees.includes(user.email))) return false;
   if (F.who === 'unassigned' && c.assignees.length) return false;
@@ -306,7 +393,7 @@ function matches(c) {
   if (F.own === '__none' ? c.assignees.length : F.own && !c.assignees.includes(F.own)) return false;
   if (F.q) {
     const q = F.q.toLowerCase().trim();
-    const hit = q.startsWith('#') ? String(c.id) === q.slice(1) : `${c.title} ${c.description} ${c.tags.join(' ')} ${c.milestone}`.toLowerCase().includes(q) || String(c.id) === q;
+    const hit = q.startsWith('#') ? String(c.num) === q.slice(1) : `${c.title} ${c.description} ${c.tags.join(' ')} ${c.milestone}`.toLowerCase().includes(q) || String(c.num) === q || refOf(c).toLowerCase() === q;
     if (!hit) return false;
   }
   return true;
@@ -314,14 +401,15 @@ function matches(c) {
 const anyFilter = () => Object.keys(F0).some((k) => F[k] !== F0[k]);
 function needsMe(c) {
   if (!user) return false;
-  const mineIP = c.assignees.includes(user.email) && c.status === 'in_progress';
-  if (user.role === 'tester') return c.status === 'ready_to_test';
-  if (user.role === 'dev') return mineIP;
-  return c.status === 'ready_to_test' || mineIP;
+  const mineIP = c.assignees.includes(user.email) && c.status === 'in_progress', r = roleOf(c.project);
+  if (r === 'tester') return c.status === 'ready_to_test';
+  if (r === 'dev') return mineIP;
+  return r === 'admin' && (c.status === 'ready_to_test' || mineIP);
 }
 function renderNeed() {
-  const n = cards.filter(needsMe).length, b = $('#needBtn');
-  b.innerHTML = `${t('need_' + (user?.role || 'dev'))}<b>${n}</b>`; b.classList.toggle('on', F.need); b.setAttribute('aria-pressed', F.need);
+  const n = cards.filter((c) => (!viewProject || c.project === viewProject) && needsMe(c)).length, b = $('#needBtn');
+  const nr = isAdmin() ? 'admin' : rv('tester') && !rv('dev') ? 'tester' : 'dev';
+  b.innerHTML = `${t('need_' + nr)}<b>${n}</b>`; b.classList.toggle('on', F.need); b.setAttribute('aria-pressed', F.need);
   document.title = n ? `(${n}) GeckoBoard` : 'GeckoBoard';
   const sb = $('#sortBtn'); sb.textContent = t('sort_' + sortMode); sb.title = t('sort_tip_' + sortMode); sb.classList.toggle('on', sortMode === 'manual');
 }
@@ -374,23 +462,24 @@ function dueChip(c) {
 }
 function cardHtml(c) {
   const owner = c.assignees[0], mine = !!user && c.assignees.includes(user.email), lockedByOther = !!owner && !mine;
-  const canTick = role('dev', 'admin') && c.status !== 'complete' && c.status !== 'ready_to_test';
+  const canTick = rl(c.project, 'dev', 'admin') && c.status !== 'complete' && c.status !== 'ready_to_test';
   let ctl = '';
   if (canTick && !lockedByOther) ctl = `<label class="chk" title="${t('tick_tip')}"><input type="checkbox" data-claim="${c.id}" ${mine ? 'checked' : ''}></label>`;
   else if (lockedByOther && canTick) ctl = `<span class="lock" title="${esc(t('claimed_by', nameOf(owner)))}">${LOCK}</span>`;
   const claim = owner ? `<div class="claim${mine ? ' me' : ''}">${avatar(owner)}<span>${mine ? `<b>${t('you')}</b>` : `<b>${esc(nameOf(owner))}</b>`} · ${t(c.status === 'complete' ? 'did_it' : 'working')}</span></div>` : '';
   const chips = [dueChip(c), c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : '',
-    c.parent && cards.some((x) => x.id === c.parent) ? `<span class="pill">↳ #${c.parent}</span>` : '', cards.some((x) => x.parent === c.id) ? `<span class="pill">⑂ ${cards.filter((x) => x.parent === c.id).length}</span>` : '',
+    c.parent && cards.some((x) => x.id === c.parent) ? `<span class="pill" title="${esc(t('parent_of'))}">↳ ${refOf(cards.find((x) => x.id === c.parent))}</span>` : '', cards.some((x) => x.parent === c.id) ? `<span class="pill">⑂ ${cards.filter((x) => x.parent === c.id).length}</span>` : '',
     c.files.length ? `<span class="pill">📎 ${c.files.length}</span>` : '',
 ].filter(Boolean).join('');
   return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}${flash.has(c.id) ? ' flash' : ''}" data-id="${c.id}" data-pri="${c.priority}" draggable="true">
-    <div class="row">${ctl}<span class="cid">#${c.id}</span><span class="tag ${c.type}">${c.type}</span>
+    <div class="row">${ctl}<span class="cid">${refOf(c)}</span><span class="tag ${c.type}">${c.type}</span>
     <span class="prib pri-${c.priority}">${t('pri_' + c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>
     ${c.tags.length ? `<div class="row">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : ''}
     ${chips ? `<div class="chiprow">${chips}</div>` : ''}${claim}</div>`;
 }
 function renderBoard() {
+  if (loadedOnce && user && !projects.length && !isAdmin()) { $('#board').innerHTML = `<div class="onb"><div class="big">🔒</div><h2>${t('no_projects_t')}</h2><p>${t('no_projects')}</p></div>`; $('#tabs').innerHTML = ''; return; }
   if (loadedOnce && !cards.length && user) { // brand-new board: guide the first step
     $('#board').innerHTML = `<div class="onb"><div class="big">🦎</div><h2>${t('onb_title')}</h2><p>${t('onb_sub')}</p><button class="btn primary" id="onbNew">${t('onb_btn')}</button></div>`;
     $('#onbNew').onclick = () => openCardDlg(null); $('#tabs').innerHTML = ''; return;
@@ -405,10 +494,10 @@ function renderBoard() {
       else if (old.length) oldBtn = `<button class="oldbtn" data-old="0">${t('hide_old')}</button>`;
     }
     const mineN = user ? list.filter((c) => c.assignees.includes(user.email)).length : 0;
-    const hot = role('tester') && k === 'ready_to_test' && list.length > 0;
+    const hot = rv('tester') && k === 'ready_to_test' && list.length > 0;
     const empty = anyFilter() ? t('no_match') : t('empty_' + k);
     return `<section class="col${mcol === k ? ' active' : ''}" data-status="${k}"><h2><span class="dot" style="background:var(${col})"></span>${t('s_' + k)}
-      <span class="cnt">${mineN && role('dev', 'admin') ? `<span class="count me" title="${t('mine')}">👤 ${mineN}</span>` : ''}<span class="count${hot ? ' hot' : ''}">${list.length}</span></span></h2>`
+      <span class="cnt">${mineN && rv('dev', 'admin') ? `<span class="count me" title="${t('mine')}">👤 ${mineN}</span>` : ''}<span class="count${hot ? ' hot' : ''}">${list.length}</span></span></h2>`
       + `<div class="colbody">${list.map(cardHtml).join('') || `<div class="empty">${empty}</div>`}${oldBtn}</div></section>`;
   }).join('');
   $('#tabs').innerHTML = COLS.map(([k]) => `<button data-s="${k}" class="${mcol === k ? 'on' : ''}"><span class="tc">${vis.filter((c) => c.status === k).length}</span><span class="tl">${t('s_' + k)}</span></button>`).join('');
@@ -417,8 +506,8 @@ function renderBoard() {
 function renderAll() { renderFilters(); renderBoard(); renderBell(); }
 
 // Undo: every state change offers a button for a few seconds (the server only lets you undo your own last action)
-function undoToast(id, key) { toast(t(key, id), { label: t('undo'), fn: async () => { await api('POST', `/cards/${id}/undo`, {}); await load(); toast(t('undone')); } }); }
-function restoreToast(id) { toast(t('u_deleted', id), { label: t('undo'), fn: async () => { await api('POST', `/trash/${id}/restore`, {}); await load(); toast(t('u_restored', id)); } }); }
+function undoToast(id, key) { const c = cards.find((x) => x.id === id); toast(t(key, c ? refOf(c) : id), { label: t('undo'), fn: async () => { await api('POST', `/cards/${id}/undo`, {}); await load(); toast(t('undone')); } }); }
+function restoreToast(id, ref) { toast(t('u_deleted', ref), { label: t('undo'), fn: async () => { await api('POST', `/trash/${id}/restore`, {}); await load(); toast(t('u_restored', ref)); } }); }
 
 // board interactions: tick-to-claim, open card, "show older"
 
@@ -470,12 +559,12 @@ async function moveCard(c, to) {
   const mine = c.assignees.includes(user.email);
   if (['open-in_progress', 'in_progress-open', 'ready_to_test-complete', 'complete-open', 'complete-in_progress'].includes(`${from}-${to}`)) markBusy(c.id);
   try {
-    if (from === 'open' && to === 'in_progress' && role('dev', 'admin')) { await api('POST', `/cards/${c.id}/claim`, {}); await load(); return undoToast(c.id, 'u_claimed'); }
-    else if (from === 'in_progress' && to === 'open' && (mine || role('admin'))) { await api('POST', `/cards/${c.id}/unclaim`, mine ? {} : { email: c.assignees[0] }); await load(); return undoToast(c.id, 'u_released'); }
-    else if (from === 'ready_to_test' && to === 'complete' && role('tester', 'admin')) { await api('POST', `/cards/${c.id}/pass`, {}); await load(); return undoToast(c.id, 'u_passed'); }
-    else if (from === 'ready_to_test' && to === 'in_progress' && role('tester', 'admin')) return openFailDlg(c);
-    else if (from === 'complete' && (to === 'open' || to === 'in_progress') && role('tester', 'admin')) await api('POST', `/cards/${c.id}/reopen`, {});
-    else if (from === 'in_progress' && to === 'ready_to_test' && role('dev', 'admin')) { if (mine || role('admin')) return openReadyDlg(c); return toast(t('move_not_yours')); }
+    if (from === 'open' && to === 'in_progress' && rl(c.project, 'dev', 'admin')) { await api('POST', `/cards/${c.id}/claim`, {}); await load(); return undoToast(c.id, 'u_claimed'); }
+    else if (from === 'in_progress' && to === 'open' && (mine || rl(c.project, 'admin'))) { await api('POST', `/cards/${c.id}/unclaim`, mine ? {} : { email: c.assignees[0] }); await load(); return undoToast(c.id, 'u_released'); }
+    else if (from === 'ready_to_test' && to === 'complete' && rl(c.project, 'tester', 'admin')) { await api('POST', `/cards/${c.id}/pass`, {}); await load(); return undoToast(c.id, 'u_passed'); }
+    else if (from === 'ready_to_test' && to === 'in_progress' && rl(c.project, 'tester', 'admin')) return openFailDlg(c);
+    else if (from === 'complete' && (to === 'open' || to === 'in_progress') && rl(c.project, 'tester', 'admin')) await api('POST', `/cards/${c.id}/reopen`, {});
+    else if (from === 'in_progress' && to === 'ready_to_test' && rl(c.project, 'dev', 'admin')) { if (mine || rl(c.project, 'admin')) return openReadyDlg(c); return toast(t('move_not_yours')); }
     else return toast(t('move_no'));
   } catch (err) { toast(err.data?.claimed_by ? t('already', nameOf(err.data.claimed_by)) : err.message); }
   await load();
@@ -484,10 +573,10 @@ async function moveCard(c, to) {
 // ---------- card detail ----------
 function linkRow(id, removable, kind) {
   const c = cards.find((x) => x.id === id); if (!c) return '';
-  return `<div class="lnk"><a data-open="${id}">#${id} ${esc(c?.title || '?')}</a><span class="pill">${c ? t('s_' + c.status) : ''}</span>${removable ? `<button class="x" data-unlink="${id}" data-kind="${kind}" title="${t('unlink')}">✕</button>` : ''}</div>`;
+  return `<div class="lnk"><a data-open="${id}">${c ? refOf(c) : '#' + id} ${esc(c?.title || '?')}</a><span class="pill">${c ? t('s_' + c.status) : ''}</span>${removable ? `<button class="x" data-unlink="${id}" data-kind="${kind}" title="${t('unlink')}">✕</button>` : ''}</div>`;
 }
 function mdText(c) {
-  const L = [`#${c.id} ${c.title}`, `${c.type} · ${t('s_' + c.status)} · ${t('pri_' + c.priority)}`];
+  const L = [`${refOf(c)} ${c.title}`, `${c.type} · ${t('s_' + c.status)} · ${t('pri_' + c.priority)}`];
   if (c.assignees.length) L.push(`${t('working')}: ${c.assignees.map(nameOf).join(', ')}`);
   if (c.due) L.push(t('due_on', c.due)); if (c.milestone) L.push(t('ms_chip', c.milestone));
   if (c.description) L.push('', c.description);
@@ -500,20 +589,20 @@ function showCard(id, keep) {
   openId = id;
   const scroll = $('#viewDlg').scrollTop; const draft = $('#cmt')?.value;
   const mine = c.assignees.includes(user.email), owner = c.assignees[0];
-  const canEdit = role('admin') || c.reporter === user.email || mine;
+  const canEdit = rl(c.project, 'admin') || c.reporter === user.email || mine;
   const kids = cards.filter((x) => x.parent === c.id);
   const prim = [], sec = []; // primary = the next step for this card (sticky bar on phones); secondary = release / edit steps / delete
-  if (c.status !== 'complete' && role('dev', 'admin')) {
+  if (c.status !== 'complete' && rl(c.project, 'dev', 'admin')) {
     if (mine) sec.push(`<button class="btn" data-a="unclaim">${t('release')}</button>`);
     else if (!owner) prim.push(`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
-    else if (role('admin')) sec.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other', nameOf(owner))}</button>`);
+    else if (rl(c.project, 'admin')) sec.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other', nameOf(owner))}</button>`);
   }
-  if (c.status === 'ready_to_test' && role('tester', 'admin')) prim.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
-  if (c.status === 'complete' && role('tester', 'admin')) prim.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
-  if (role('dev', 'admin') && (mine || role('admin')) && (c.status === 'in_progress' || c.status === 'ready_to_test')) {
+  if (c.status === 'ready_to_test' && rl(c.project, 'tester', 'admin')) prim.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
+  if (c.status === 'complete' && rl(c.project, 'tester', 'admin')) prim.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
+  if (rl(c.project, 'dev', 'admin') && (mine || rl(c.project, 'admin')) && (c.status === 'in_progress' || c.status === 'ready_to_test')) {
     (c.status === 'in_progress' ? prim : sec).unshift(`<button class="btn ${c.status === 'in_progress' ? 'primary' : ''}" data-a="ready">${t(c.status === 'in_progress' ? 'send_test' : 'edit_steps')}</button>`);
   }
-  if (role('dev', 'admin')) sec.push(`<button class="btn danger" data-a="delete">🗑 ${t('delete')}</button>`);
+  if (rl(c.project, 'dev', 'admin')) sec.push(`<button class="btn danger" data-a="delete">🗑 ${t('delete')}</button>`);
   const files = c.files.map((f) => {
     const vid = f.mime.startsWith('video/');
     const thumbSrc = f.thumb ? `/api/files/${f.id}?thumb=1` : (!f.purged && !vid ? `/api/files/${f.id}` : '');
@@ -521,7 +610,7 @@ function showCard(id, keep) {
     if (f.purged) media = thumbSrc ? `<img src="${thumbSrc}" class="gone" alt="${esc(f.name)}" data-gone="1" loading="lazy">` : `<div class="ph" data-gone="1">${vid ? '🎞' : '🖼'}</div>`;
     else if (vid) media = `<video src="/api/files/${f.id}" ${thumbSrc ? `poster="${thumbSrc}"` : ''} controls preload="none"></video>`;
     else media = `<img src="${thumbSrc}" alt="${esc(f.name)}" data-lb="${f.id}" loading="lazy">`;
-    const mineF = role('admin') || f.by === user.email;
+    const mineF = rl(c.project, 'admin') || f.by === user.email;
     return `<div class="thumb" title="${esc(f.name)}">${media}${f.purged ? `<span class="rec">♻ ${t('recycled')}</span>` : ''}
       ${mineF || f.pinned ? `<button class="pin${f.pinned ? ' on' : ''}" data-pin="${f.id}" data-on="${f.pinned ? 1 : 0}" title="${t(f.pinned ? 'unpin' : 'pin')}" ${mineF ? '' : 'disabled'}>📌</button>` : ''}
       ${mineF ? `<button class="x" data-rmfile="${f.id}" data-name="${esc(f.name)}" title="${t('remove_file')}">✕</button>` : ''}</div>`;
@@ -529,7 +618,7 @@ function showCard(id, keep) {
   const stCol = `var(${COLOR[c.status]})`;
   $('#viewBody').innerHTML = `
     <button type="button" class="dx" data-a="close" aria-label="Close">✕</button>
-    <div class="dhead"><span class="tag ${c.type}">${c.type}</span><span class="cid">#${c.id}</span><span class="meta">${t('by')} ${esc(nameOf(c.reporter))}</span>
+    <div class="dhead"><span class="tag ${c.type}">${c.type}</span><span class="cid">${refOf(c)}</span><span class="meta">${t('by')} ${esc(nameOf(c.reporter))}</span>
       <span class="prib pri-${c.priority}" style="margin-left:0">${t('pri_' + c.priority)}</span>
       <span class="status" style="margin-left:auto;color:${stCol};border:1px solid ${stCol}">${t('s_' + c.status)}</span></div>
     <div class="dgrid">
@@ -647,15 +736,16 @@ async function actInner(c, a, btn) {
   if (a === 'edit') return openCardDlg(c);
   if (a === 'copytext') return copyText(mdText(c), btn, 'copy_text');
   try {
-    if (a === 'link') { const id = +$('#linkId').value; if (!id) return; await api('POST', `/cards/${c.id}/link`, { id }); return await load(); }
-    if (a === 'setparent') { const v = $('#parentId').value; if (!v) return; await api('PATCH', `/cards/${c.id}`, { parent: +v }); return await load(); }
+    const byNum = (n) => cards.find((x) => x.project === c.project && x.num === n)?.id; // typed numbers are per project (ALPHA-12 -> 12)
+    if (a === 'link') { const n = +$('#linkId').value; if (!n) return; const id = byNum(n); if (!id) return toast(tErr(`Card #${n} not found in this project`)); await api('POST', `/cards/${c.id}/link`, { id }); return await load(); }
+    if (a === 'setparent') { const n = +$('#parentId').value; if (!n) return; const id = byNum(n); if (!id) return toast(tErr(`Card #${n} not found in this project`)); await api('PATCH', `/cards/${c.id}`, { parent: id }); return await load(); }
     if (a === 'unclaim_other') {
       const em = btn.dataset.email; if (!confirm(t('confirm_release_other', nameOf(em)))) return;
       await api('POST', `/cards/${c.id}/unclaim`, { email: em }); return await load();
     }
     if (a === 'delete') {
-      if (!confirm(t('confirm_delete', c.id, c.title))) return;
-      await api('DELETE', '/cards/' + c.id); $('#viewDlg').close(); await load(); return restoreToast(c.id);
+      if (!confirm(t('confirm_delete', refOf(c), c.title))) return;
+      const ref = refOf(c); await api('DELETE', '/cards/' + c.id); $('#viewDlg').close(); await load(); return restoreToast(c.id, ref);
     }
     const body = {};
     if (a === 'comment') { body.text = $('#cmt').value; if (!body.text.trim()) return; }
@@ -715,7 +805,10 @@ function openCardDlg(c) {
   const f = $('#cardForm'); f.reset(); $('#cardErr').textContent = ''; $('#draftBar').hidden = true;
   $('#cardDlgTitle').textContent = t(c ? 'edit_card' : 'newcard'); $('#cardSubmit').textContent = t(c ? 'save' : 'create');
   $('#newFilesRow').hidden = !!c;
-  if (c) { f.type.value = c.type; f.priority.value = c.priority; f.title.value = c.title; f.description.value = c.description; f.tags.value = c.tags.join(', '); f.due.value = c.due; f.milestone.value = c.milestone; f.parent.value = c.parent || ''; }
+  const ps = f.project, mine = activeProjects();
+  ps.innerHTML = mine.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.key)})</option>`).join(''); ps.value = c ? c.project : (mine.some((p) => p.id === curPid()) ? curPid() : mine[0]?.id || '');
+  $('#projRow').hidden = !!c || mine.length <= 1;
+  if (c) { f.type.value = c.type; f.priority.value = c.priority; f.title.value = c.title; f.description.value = c.description; f.tags.value = c.tags.join(', '); f.due.value = c.due; f.milestone.value = c.milestone; f.parent.value = c.parent ? cards.find((x) => x.id === c.parent)?.num || '' : ''; }
   else { // restore an unfinished draft
     try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) { for (const k of Object.keys(d)) if (f[k]) f[k].value = d[k]; $('#draftBar').hidden = false; } } catch { /* ignore */ }
   }
@@ -735,7 +828,8 @@ $('#newBtn').onclick = () => openCardDlg(null);
 $('#cardForm').addEventListener('submit', async (e) => {
   if (e.submitter?.value !== 'ok') return;
   e.preventDefault();
-  const f = Object.fromEntries(new FormData(e.target)); f.parent = f.parent ? +f.parent : null;
+  const f = Object.fromEntries(new FormData(e.target));
+  f.parent = f.parent ? (cards.find((x) => x.project === (editId ? cards.find((y) => y.id === editId)?.project : f.project) && x.num === +f.parent)?.id ?? -1) : null; // typed number is per project
   await withBusy(e.target, async () => {
   try {
     let card;
@@ -749,6 +843,7 @@ $('#cardForm').addEventListener('click', (e) => { if (e.target.value === 'cancel
 
 // ---------- summary ----------
 function stats() {
+  const cards = vcards();
   const cyc = []; const byDev = {}; const byTester = {};
   const dev = (e) => (byDev[e] ||= { ip: 0, ready: 0, done: 0, times: [] });
   for (const c of cards) {
@@ -762,7 +857,7 @@ function stats() {
 }
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
 function renderSummary() {
-  const s = stats(), open = cards.filter((c) => c.status !== 'complete');
+  const cards = vcards(), s = stats(), open = cards.filter((c) => c.status !== 'complete');
   const stale = cards.filter((c) => c.status === 'in_progress' && Date.now() - Date.parse(c.updated_at) > STALE_MS).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
   const late = open.filter((c) => c.due && c.due < today()).sort((a, b) => a.due.localeCompare(b.due));
   const li = (c, extra) => `<div class="lnk"><a data-open="${c.id}">#${c.id} ${esc(c.title)}</a><span class="pill">${esc(c.assignees.map(nameOf).join(', ') || '—')}</span><span class="pill late">${esc(extra)}</span></div>`;
@@ -786,8 +881,8 @@ function notifs() {
   if (!user) return [];
   const out = [];
   for (const c of cards) {
-    for (const m of c.comments) if ((m.mentions || []).includes(user.email) && m.user !== user.email) out.push({ at: m.at, id: c.id, text: t('n_mention', nameOf(m.user), c.id), sub: m.text.slice(0, 80) });
-    if (c.assignees.includes(user.email)) for (const h of c.history) if (h.action === 'test_failed') out.push({ at: h.at, id: c.id, text: t('n_failed', c.id), sub: h.text.slice(0, 80) });
+    for (const m of c.comments) if ((m.mentions || []).includes(user.email) && m.user !== user.email) out.push({ at: m.at, id: c.id, text: t('n_mention', nameOf(m.user), refOf(c)), sub: m.text.slice(0, 80) });
+    if (c.assignees.includes(user.email)) for (const h of c.history) if (h.action === 'test_failed') out.push({ at: h.at, id: c.id, text: t('n_failed', refOf(c)), sub: h.text.slice(0, 80) });
   }
   return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 15);
 }
@@ -795,7 +890,7 @@ function renderBell() {
   const list = notifs(); let seen = ''; try { seen = localStorage.getItem(seenKey()) || ''; } catch { /* ignore */ }
   const unread = list.filter((n) => n.at > seen).length;
   const mineLate = user ? cards.filter((c) => c.status !== 'complete' && c.assignees.includes(user.email) && c.due && c.due < today()).length : 0;
-  const ready = role('tester', 'admin') ? cards.filter((c) => c.status === 'ready_to_test').length : 0;
+  const ready = cards.filter((c) => c.status === 'ready_to_test' && rl(c.project, 'tester', 'admin')).length;
   const extra = [ready ? { id: null, text: t('n_ready', ready), sub: '', go: 'ready_to_test' } : null, mineLate ? { id: null, text: t('n_overdue', mineLate), sub: '' } : null].filter(Boolean);
   const total = unread + extra.length;
   const badge = $('#bellBadge'); badge.hidden = !total; badge.textContent = total;
@@ -814,7 +909,12 @@ $('#helpBtn').onclick = () => {
   $('#helpDlg').showModal();
 };
 try { if (!localStorage.getItem('devboard.helpSeen')) { localStorage.setItem('devboard.helpSeen', '1'); window.__showHelp = true; } } catch { /* ignore */ }
-function openFromHash() { const m = /^#card-(\d+)$/.exec(location.hash); if (m && cards.some((c) => c.id === +m[1])) showCard(+m[1]); }
+function openFromHash() {
+  const m = /^#card-(\d+)$/.exec(location.hash), c = m && cards.find((x) => x.id === +m[1]);
+  if (!c) return;
+  if (viewProject && c.project !== viewProject) { viewProject = c.project; renderProjectSwitch(); renderUserBox(); renderAll(); } // the link is for another project
+  showCard(c.id);
+}
 window.addEventListener('hashchange', openFromHash);
 
 // keyboard shortcuts (ignored while typing or when a window is open)

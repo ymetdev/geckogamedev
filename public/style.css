@@ -62,6 +62,7 @@ label{display:flex;flex-direction:column;gap:6px;color:var(--text2);font-size:12
 .search{position:relative;flex:1;max-width:520px;min-width:200px}
 .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--mute);pointer-events:none}
 .search input{padding-left:36px;background:var(--bg2);border-radius:11px}
+.projsel{width:auto;max-width:220px;height:36px;border-radius:10px;font-weight:600;background-color:var(--surface3);border-color:var(--line2)}
 .hx{display:flex;align-items:center;gap:8px}
 .hamb{display:none}
 .need{border-color:#3b4270;color:#b8c0ff;background:#171a2c}
@@ -245,6 +246,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
   body{display:block;height:auto;min-height:100dvh;overflow:auto;padding-bottom:calc(72px + var(--safe-b))}
   .appbar{position:sticky;top:0;flex-wrap:wrap;padding:10px 12px;gap:8px;backdrop-filter:none;background:var(--bg2)} /* (backdrop-filter would trap the fixed + button) */
   .brand-name{display:none}.brand{margin-right:0}
+  .projsel{order:1;max-width:46vw;height:40px}
   .search{order:10;flex:1 1 100%;max-width:none}
   .mobsp{display:none}
   .hamb{display:inline-flex;order:4}
@@ -290,3 +292,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
   input,select{height:44px}
 }
 @media(max-width:380px){.kpis{grid-template-columns:repeat(2,1fr)}}
+
+.mrow{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}.mrow .e{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.mrow select{width:auto;height:34px}
+.prow{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}.prow b{font-size:15px}.prow .meta{display:block}
+.keybadge{font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:1px 8px;border-radius:999px;background:var(--surface3);border:1px solid var(--line2);color:var(--text2);margin-left:6px}

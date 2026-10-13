@@ -61,7 +61,7 @@ if (pool) {
 } else {
   try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
 }
-db.users ||= []; db.sessions ||= {}; db.trash ||= [];
+db.users ||= []; db.sessions ||= {}; db.trash ||= []; db.projects ||= [];
 // one-time migration: files from the first version (id-addressed table / raw files) -> content-addressed blobs
 for (const c of db.cards) for (const f of c.files || []) {
   if (f.blob) continue;
@@ -90,6 +90,15 @@ if (ADMIN_EMAIL) {
   const u = db.users.find((x) => x.email === ADMIN_EMAIL);
   if (u) u.role = 'admin'; else db.users.push(newUser(ADMIN_EMAIL, ADMIN_EMAIL.split('@')[0], 'admin'));
 }
+// Projects: every card belongs to one project (numbered KEY-n). People get a role per project; global admins see everything.
+if (!db.projects.length) { // first start with projects: put all existing cards and people into one default project
+  db.projects.push({
+    id: 'main', name: process.env.DEFAULT_PROJECT_NAME || 'Main', key: (process.env.DEFAULT_PROJECT_KEY || 'MAIN').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'MAIN',
+    seq: db.seq, members: Object.fromEntries(db.users.filter((u) => u.role !== 'admin').map((u) => [u.email, u.role])),
+    discord_webhook: '', discord_tester_role: '', archived: false, created_at: new Date().toISOString(),
+  });
+}
+for (const c of [...db.cards, ...db.trash]) { c.project ??= db.projects[0].id; c.num ??= c.id; }
 await save();
 function save() {
   rev++;
@@ -125,6 +134,16 @@ function authUser(req) {
   return email ? db.users.find((u) => u.email === email) || null : null;
 }
 const can = (user, ...roles) => roles.includes(user.role);
+const projOf = (id) => db.projects.find((p) => p.id === id);
+const roleIn = (u, projectId) => { // 'admin' | 'dev' | 'tester' | null (no access)
+  if (u.role === 'admin') return 'admin';
+  const p = projOf(projectId);
+  return p && !p.archived ? p.members?.[u.email] || null : null;
+};
+const forbidIn = (u, projectId, ...roles) => need(roles.includes(roleIn(u, projectId)), 403, `Role "${roleIn(u, projectId) || 'none'}" is not allowed to do this`);
+const myProjects = (u) => db.projects.filter((p) => roleIn(u, p.id)).map((p) => ({ id: p.id, name: p.name, key: p.key, role: roleIn(u, p.id), archived: !!p.archived }));
+const refOf = (c) => `${projOf(c.project)?.key || '?'}-${c.num ?? c.id}`;
+const visibleCards = (u, pj = '') => db.cards.filter((c) => roleIn(u, c.project) && (!pj || c.project === pj));
 const forbid = (user, ...roles) => need(can(user, ...roles), 403, `Role "${user.role}" is not allowed to do this`);
 
 const nameOfUser = (email) => db.users.find((u) => u.email === email)?.name || email;
@@ -134,19 +153,21 @@ const COLORS = { ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ad
 const DTXT = {
   en: { ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned', deleted: '🗑 Card deleted',
     dev: 'Dev', by: 'By', type: 'Type', priority: 'Priority', due: 'Due', ms: 'Milestone', tags: 'Tags', desc: 'Description', summary: 'What was done', steps: 'How to test',
-    ping: '🧪 Card #{0} is ready for testing!', more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
+    ping: '🧪 Card {0} is ready for testing!', more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
     st: { open: 'Open', in_progress: 'In Progress', ready_to_test: 'Ready to Test', complete: 'Complete' }, pri: { low: 'low', medium: 'medium', high: 'high', critical: 'critical' } },
   th: { ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ', deleted: '🗑 ลบการ์ดแล้ว',
     dev: 'Dev', by: 'โดย', type: 'ประเภท', priority: 'ความสำคัญ', due: 'กำหนดส่ง', ms: 'Milestone', tags: 'Tag', desc: 'รายละเอียด', summary: 'สิ่งที่ทำ', steps: 'วิธีเทส',
-    ping: '🧪 การ์ด #{0} พร้อมให้เทสแล้ว!', more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
+    ping: '🧪 การ์ด {0} พร้อมให้เทสแล้ว!', more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
     st: { open: 'เปิด', in_progress: 'กำลังทำ', ready_to_test: 'พร้อมเทส', complete: 'เสร็จสิ้น' }, pri: { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สูง', critical: 'วิกฤต' } },
 }[DLANG];
 const PRI_ICON = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' };
 const cut = (s, n) => { s = String(s || '').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 function notify(event, card, actor, text = '') {
-  if (!DISCORD_WEBHOOK_URL) return;
+  const proj = projOf(card.project);
+  const hook = proj?.discord_webhook || DISCORD_WEBHOOK_URL, roleId = (proj?.discord_tester_role || DISCORD_TESTER_ROLE_ID || '').replace(/\D/g, '');
+  if (!hook) return;
   const url = PUBLIC_URL ? `${PUBLIC_URL}/#card-${card.id}` : '';
-  const ping = event === 'ready_to_test' && !!DISCORD_TESTER_ROLE_ID;
+  const ping = event === 'ready_to_test' && !!roleId;
   const owner = card.assignees[0] ? nameOfUser(card.assignees[0]) : DTXT.unassigned;
   const fields = [
     { name: DTXT.type, value: `${card.type === 'ticket' ? '🎫 Ticket' : '📋 Task'}`, inline: true },
@@ -155,6 +176,7 @@ function notify(event, card, actor, text = '') {
     { name: DTXT.dev, value: owner, inline: true },
     { name: DTXT.by, value: nameOfUser(actor), inline: true },
   ];
+  if (proj) fields.unshift({ name: 'Project', value: proj.name, inline: true });
   if (card.due) fields.push({ name: DTXT.due, value: card.due, inline: true });
   if (card.milestone) fields.push({ name: DTXT.ms, value: card.milestone, inline: true });
   if (card.tags.length) fields.push({ name: DTXT.tags, value: card.tags.map((t) => `\`${t}\``).join(' '), inline: false });
@@ -172,15 +194,15 @@ function notify(event, card, actor, text = '') {
   if (url && event !== 'deleted') fields.push({ name: '\u200b', value: `**[${DTXT.open}](${url})**`, inline: false });
   const embed = {
     author: { name: DTXT[event] },
-    title: cut(`#${card.id} · ${card.title}`, 250),
+    title: cut(`${refOf(card)} · ${card.title}`, 250),
     url: event === 'deleted' ? undefined : (url || undefined),
     color: COLORS[event], fields,
     footer: { text: 'GeckoBoard' }, timestamp: new Date().toISOString(),
   };
-  fetch(DISCORD_WEBHOOK_URL, {
+  fetch(hook, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(ping
-      ? { content: `<@&${DISCORD_TESTER_ROLE_ID}> ${DTXT.ping.replace('{0}', card.id)}`, embeds: [embed], allowed_mentions: { roles: [DISCORD_TESTER_ROLE_ID] } }
+      ? { content: `<@&${roleId}> ${DTXT.ping.replace('{0}', refOf(card))}`, embeds: [embed], allowed_mentions: { roles: [roleId] } }
       : { embeds: [embed], allowed_mentions: { parse: [] } }),
     signal: AbortSignal.timeout(5000),
   }).catch((e) => console.error('Discord notify failed:', e.message));
@@ -244,7 +266,7 @@ async function listBackups() {
   } catch { return []; }
 }
 async function makeBackup(label = 'manual') {
-  const body = JSON.stringify({ version: 1, taken_at: now(), seq: db.seq, cards: db.cards, trash: db.trash, users: db.users });
+  const body = JSON.stringify({ version: 2, taken_at: now(), seq: db.seq, cards: db.cards, trash: db.trash, users: db.users, projects: db.projects });
   if (body.length > BACKUP_MAX_BYTES) throw new HttpError(413, 'Data is too large to back up automatically');
   if (pool) {
     await pool.query('INSERT INTO devboard_backups (label, size, data) VALUES ($1, $2, $3::jsonb)', [label, body.length, body]);
@@ -267,6 +289,8 @@ async function restoreBackup(id) { // brings back cards + trash (users and sessi
   need(data && Array.isArray(data.cards), 404, 'Backup not found');
   await makeBackup('before-restore');
   db.cards = data.cards; db.trash = data.trash || []; db.seq = Math.max(db.seq, data.seq || 0);
+  if (Array.isArray(data.projects) && data.projects.length) db.projects = data.projects;
+  for (const c of [...db.cards, ...db.trash]) { c.project ??= db.projects[0].id; c.num ??= c.id; }
   for (const c of db.cards) { c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; }
   await save();
   return { cards: db.cards.length };
@@ -274,8 +298,8 @@ async function restoreBackup(id) { // brings back cards + trash (users and sessi
 const csvCell = (v) => { const s = Array.isArray(v) ? v.join('; ') : String(v ?? ''); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 function exportCsv() { // UTF-8 with BOM so Excel shows Thai correctly
   const nameOf = (e) => db.users.find((u) => u.email === e)?.name || e;
-  const head = ['id', 'type', 'title', 'status', 'priority', 'tags', 'owner', 'reporter', 'due', 'milestone', 'parent', 'created', 'updated', 'description', 'summary', 'test_steps', 'comments'];
-  const rows = db.cards.map((c) => [c.id, c.type, c.title, c.status, c.priority, c.tags, c.assignees.map(nameOf), nameOf(c.reporter), c.due, c.milestone, c.parent, c.created_at, c.updated_at,
+  const head = ['ref', 'project', 'id', 'type', 'title', 'status', 'priority', 'tags', 'owner', 'reporter', 'due', 'milestone', 'parent', 'created', 'updated', 'description', 'summary', 'test_steps', 'comments'];
+  const rows = db.cards.map((c) => [refOf(c), projOf(c.project)?.name || '', c.id, c.type, c.title, c.status, c.priority, c.tags, c.assignees.map(nameOf), nameOf(c.reporter), c.due, c.milestone, c.parent, c.created_at, c.updated_at,
     c.description, c.dev_summary, c.test_steps.map((x, i) => `${i + 1}. ${x}`).join('\n'), c.comments.map((m) => `${nameOf(m.user)}: ${m.text}`).join('\n')]);
   return '\ufeff' + [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
 }
@@ -361,7 +385,7 @@ function readBody(req) {
 }
 class HttpError extends Error { constructor(code, msg, extra) { super(msg); this.code = code; this.extra = extra; } }
 const need = (cond, code, msg, extra) => { if (!cond) throw new HttpError(code, msg, extra); };
-const find = (id) => {
+const find = (id) => { // (callers must also check project access)
   const c = db.cards.find((x) => x.id === Number(id));
   need(c, 404, `Card #${id} not found`);
   return c;
@@ -413,6 +437,8 @@ async function api(req, res, url) {
 
   const me = authUser(req);
   need(me, 401, 'Not logged in');
+  const pj = clean(req.headers['x-devboard-project'], 60); // set by a project-scoped MCP connection
+  if (pj) need(roleIn(me, pj), 403, 'You are not a member of this project');
   const user = me.email; // identity always comes from auth, never from the request body
 
   if (parts[0] === 'me' && parts[1] === 'rotate-token' && method === 'POST') {
@@ -420,7 +446,7 @@ async function api(req, res, url) {
     await save();
     return sendJson(res, 200, { token: me.token });
   }
-  if (parts[0] === 'me' && method === 'GET') return sendJson(res, 200, { ...publicUser(me), token: me.token });
+  if (parts[0] === 'me' && method === 'GET') return sendJson(res, 200, { ...publicUser(me), token: me.token, projects: myProjects(me) });
 
   // ---- users ----
   if (parts[0] === 'users') {
@@ -433,6 +459,7 @@ async function api(req, res, url) {
       need(ROLES.includes(body.role), 400, 'Invalid role');
       const u = newUser(email, clean(body.name, 60) || email.split('@')[0], body.role);
       db.users.push(u);
+      const tp = projOf(clean(body.project, 60)); if (tp && body.role !== 'admin') (tp.members ||= {})[email] = body.role; // joins the project it was added from
       await save();
       return sendJson(res, 201, publicUser(u));
     }
@@ -452,9 +479,47 @@ async function api(req, res, url) {
     if (method === 'DELETE') {
       need(!(u.role === 'admin' && admins.length === 1), 409, 'Cannot remove the last admin');
       db.users = db.users.filter((x) => x !== u);
+      for (const p of db.projects) delete p.members?.[email];
       for (const [sid, e] of Object.entries(db.sessions)) if (e === email) delete db.sessions[sid];
       await save();
       return sendJson(res, 200, { ok: true });
+    }
+    throw new HttpError(405, 'Method not allowed');
+  }
+
+  // ---- projects ----
+  if (parts[0] === 'projects') {
+    if (method === 'GET' && parts.length === 1) {
+      if (me.role !== 'admin') return sendJson(res, 200, myProjects(me));
+      return sendJson(res, 200, db.projects.map((p) => ({ ...p, cards: db.cards.filter((c) => c.project === p.id).length })));
+    }
+    forbid(me, 'admin');
+    const slug = (n) => { let b = String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'p'; let id = b, i = 2; while (projOf(id)) id = `${b}-${i++}`; return id; };
+    const cleanKey = (k) => String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    if (method === 'POST' && parts.length === 1) {
+      const name = clean(body.name, 60); need(name, 400, 'Project name required');
+      const key = cleanKey(body.key || name); need(key.length >= 2, 400, 'Project key must be 2-8 letters/numbers');
+      need(!db.projects.some((p) => p.key === key), 409, 'Project key already used');
+      const copy = projOf(clean(body.copy_members_from, 60));
+      const p = { id: slug(name), name, key, seq: 0, members: copy ? { ...copy.members } : {}, discord_webhook: '', discord_tester_role: '', archived: false, created_at: now() };
+      db.projects.push(p); await save();
+      return sendJson(res, 201, p);
+    }
+    const p = projOf(parts[1]); need(p, 404, 'Project not found');
+    if (method === 'PATCH' && parts.length === 2) {
+      if (body.name !== undefined) { const n = clean(body.name, 60); need(n, 400, 'Project name required'); p.name = n; }
+      if (body.key !== undefined) { const k = cleanKey(body.key); need(k.length >= 2, 400, 'Project key must be 2-8 letters/numbers'); need(!db.projects.some((x) => x !== p && x.key === k), 409, 'Project key already used'); p.key = k; }
+      if (body.discord_webhook !== undefined) { const w = clean(body.discord_webhook, 300); need(w === '' || /^https:\/\/(\w+\.)?discord(app)?\.com\/api\/webhooks\//.test(w), 400, 'Not a Discord webhook URL'); p.discord_webhook = w; }
+      if (body.discord_tester_role !== undefined) p.discord_tester_role = clean(body.discord_tester_role, 30).replace(/\D/g, '');
+      if (body.archived !== undefined) { need(!(body.archived && db.projects.filter((x) => !x.archived).length <= 1 && !p.archived), 409, 'Keep at least one active project'); p.archived = !!body.archived; }
+      await save(); return sendJson(res, 200, p);
+    }
+    if (method === 'PUT' && parts[2] === 'members') { // body.members = { email: 'dev' | 'tester' | null }
+      for (const [email, r] of Object.entries(body.members || {})) {
+        if (!db.users.some((u) => u.email === email)) continue;
+        if (r === 'dev' || r === 'tester') (p.members ||= {})[email] = r; else delete p.members[email];
+      }
+      await save(); return sendJson(res, 200, p);
     }
     throw new HttpError(405, 'Method not allowed');
   }
@@ -475,7 +540,7 @@ async function api(req, res, url) {
       return res.end(exportCsv());
     }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="geckoboard-${day}.json"` });
-    return res.end(JSON.stringify({ exported_at: now(), cards: db.cards, trash: db.trash, users: db.users.map(publicUser) }, null, 2)); // no tokens
+    return res.end(JSON.stringify({ exported_at: now(), projects: db.projects.map(({ discord_webhook, ...p }) => p), cards: db.cards, trash: db.trash, users: db.users.map(publicUser) }, null, 2)); // no tokens
   }
 
   // ---- storage ----
@@ -488,7 +553,7 @@ async function api(req, res, url) {
 
   // ---- attachments: download ----
   if (parts[0] === 'files' && parts.length === 2 && method === 'GET') {
-    const f = db.cards.flatMap((c) => c.files).find((x) => x.id === parts[1]);
+    const f = visibleCards(me, pj).flatMap((c) => c.files).find((x) => x.id === parts[1]);
     need(f, 404, 'File not found');
     const wantThumb = url.searchParams.get('thumb') === '1';
     const buf = await getBlob(f.blob, wantThumb);
@@ -518,12 +583,12 @@ async function api(req, res, url) {
   }
   if (parts[0] === 'state' && method === 'GET') { // cheap poll: nothing is sent back if nothing changed
     if (Number(url.searchParams.get('since')) === rev) return sendJson(res, 200, { rev, unchanged: true });
-    return sendJson(res, 200, { rev, cards: db.cards, users: db.users.map(publicUser) });
+    return sendJson(res, 200, { rev, cards: visibleCards(me, pj), projects: myProjects(me), users: db.users.map(publicUser) });
   }
   if (parts[0] === 'trash' && parts[2] === 'restore' && method === 'POST') {
-    forbid(me, 'admin', 'dev');
     const card = db.trash.find((c) => c.id === Number(parts[1]));
     need(card, 404, 'Nothing to restore (it may have been removed for good)');
+    forbidIn(me, card.project, 'dev', 'admin');
     db.trash = db.trash.filter((c) => c !== card);
     delete card.deleted_at; delete card.deleted_by;
     db.cards.push(card);
@@ -534,8 +599,9 @@ async function api(req, res, url) {
 
   // ---- cards ----
   if (parts[0] === 'cards' && parts.length === 1 && method === 'GET') {
-    let list = db.cards;
+    let list = visibleCards(me, pj);
     const q = url.searchParams;
+    if (q.get('project')) list = list.filter((c) => c.project === q.get('project'));
     if (q.get('type')) list = list.filter((c) => c.type === q.get('type'));
     if (q.get('status')) list = list.filter((c) => q.get('status').split(',').includes(c.status));
     if (q.get('assignee')) list = list.filter((c) => c.assignees.includes(q.get('assignee')));
@@ -545,16 +611,19 @@ async function api(req, res, url) {
   if (parts[0] === 'cards' && parts.length === 1 && method === 'POST') {
     const title = clean(body.title, 200);
     need(title, 400, 'title required');
-    const dup = db.cards.find((c) => c.reporter === user && c.title === title && Date.now() - Date.parse(c.created_at) < 15000); // double-click / retry safety net
+    const pid = clean(body.project, 60) || pj || myProjects(me).find((x) => !x.archived)?.id;
+    need(pid && roleIn(me, pid), 403, 'Pick a project you belong to');
+    const dup = db.cards.find((c) => c.project === pid && c.reporter === user && c.title === title && Date.now() - Date.parse(c.created_at) < 15000); // double-click / retry safety net
     if (dup) return sendJson(res, 200, dup);
     const type = TYPES.includes(body.type) ? body.type : 'task';
     const priority = PRIORITIES.includes(body.priority) ? body.priority : 'medium';
     const tags = cleanTags(body.tags);
     const due = isDate(clean(body.due, 10)) ? clean(body.due, 10) : '';
     const parentId = body.parent ? Number(body.parent) : null;
-    need(parentId === null || db.cards.some((c) => c.id === parentId), 400, `Parent card #${parentId} not found`);
+    need(parentId === null || db.cards.some((c) => c.id === parentId && c.project === pid), 400, `Parent card #${parentId} not found in this project`);
+    const proj = projOf(pid);
     const card = {
-      id: ++db.seq, type, title, description: clean(body.description), priority, tags,
+      id: ++db.seq, project: pid, num: ++proj.seq, type, title, description: clean(body.description), priority, tags,
       due, milestone: clean(body.milestone, 40), parent: parentId, related: [], files: [],
       reporter: user, status: 'open', assignees: [],
       dev_summary: '', test_steps: [], comments: [], history: [],
@@ -568,11 +637,12 @@ async function api(req, res, url) {
 
   if (parts[0] !== 'cards') throw new HttpError(404, 'Not found');
   const card = find(parts[1]);
+  need(roleIn(me, card.project) && (!pj || card.project === pj), 404, `Card #${parts[1]} not found`);
   const action = parts[2];
 
   if (!action && method === 'GET') return sendJson(res, 200, card);
   if (!action && method === 'DELETE') { // soft delete: kept in the trash for TRASH_DAYS so it can be undone
-    forbid(me, 'admin', 'dev');
+    forbidIn(me, card.project, 'admin', 'dev');
     notify('deleted', card, user); // the team sees who deleted what
     db.cards = db.cards.filter((c) => c !== card);
     card.deleted_at = now(); card.deleted_by = user;
@@ -592,7 +662,7 @@ async function api(req, res, url) {
     if (body.parent !== undefined) {
       const pid = body.parent ? Number(body.parent) : null;
       if (pid !== null) {
-        need(db.cards.some((c) => c.id === pid), 400, `Card #${pid} not found`);
+        need(db.cards.some((c) => c.id === pid && c.project === card.project), 400, `Card #${pid} not found in this project`);
         need(pid !== card.id && !descendants(card.id).has(pid), 400, 'A card cannot be its own parent or sub-card');
       }
       card.parent = pid;
@@ -625,7 +695,7 @@ async function api(req, res, url) {
 
   switch (action) {
     case 'claim': { // Dev marks "I'll do this"
-      forbid(me, 'dev', 'admin');
+      forbidIn(me, card.project, 'dev', 'admin');
       need(card.status !== 'complete', 409, 'Card already complete');
       const other = card.assignees.find((a) => a !== user); // one card, one owner
       need(!other, 409, `Already claimed by ${db.users.find((u) => u.email === other)?.name || other}`, { claimed_by: other });
@@ -670,8 +740,8 @@ async function api(req, res, url) {
       return sendJson(res, 200, card);
     }
     case 'link': case 'unlink': { // "related" links are two-way
-      const other = db.cards.find((c) => c.id === Number(body.id));
-      need(other && other.id !== card.id, 400, 'Card not found');
+      const other = db.cards.find((c) => c.id === Number(body.id) && c.project === card.project);
+      need(other && other.id !== card.id, 400, 'Card not found in this project');
       if (action === 'link') {
         if (!card.related.includes(other.id)) card.related.push(other.id);
         if (!other.related.includes(card.id)) other.related.push(card.id);
@@ -709,14 +779,14 @@ async function api(req, res, url) {
     }
     case 'move': { // manual order inside a column: place between two neighbours
       const epos = (c) => c.pos ?? Date.parse(c.created_at);
-      const above = body.after ? db.cards.find((c) => c.id === Number(body.after)) : null;
-      const below = body.before ? db.cards.find((c) => c.id === Number(body.before)) : null;
+      const above = body.after ? db.cards.find((c) => c.id === Number(body.after) && c.project === card.project) : null;
+      const below = body.before ? db.cards.find((c) => c.id === Number(body.before) && c.project === card.project) : null;
       card.pos = above && below ? (epos(above) + epos(below)) / 2 : above ? epos(above) + 1000 : below ? epos(below) - 1000 : Date.now();
       await save(); // no history entry / updated_at: re-ordering is not a content change
       return sendJson(res, 200, card);
     }
     case 'ready': { // Dev/Claude: fix done, ready for tester
-      forbid(me, 'dev', 'admin');
+      forbidIn(me, card.project, 'dev', 'admin');
       need(card.assignees.includes(user) || can(me, 'admin'), 403, 'Only an assignee can mark this ready');
       need(card.status === 'in_progress' || card.status === 'ready_to_test', 409, 'Card must be in progress first');
       const steps = (Array.isArray(body.test_steps) ? body.test_steps : []).map((s) => clean(s, 500)).filter(Boolean);
@@ -729,7 +799,7 @@ async function api(req, res, url) {
       break;
     }
     case 'pass': { // Tester: passed -> complete
-      forbid(me, 'tester', 'admin');
+      forbidIn(me, card.project, 'tester', 'admin');
       need(card.status === 'ready_to_test', 409, 'Card is not ready to test');
       card.status = 'complete';
       card.completed_by = user;
@@ -738,7 +808,7 @@ async function api(req, res, url) {
       break;
     }
     case 'fail': { // Tester: send back to dev
-      forbid(me, 'tester', 'admin');
+      forbidIn(me, card.project, 'tester', 'admin');
       need(card.status === 'ready_to_test', 409, 'Card is not ready to test');
       const reason = clean(body.text);
       need(reason, 400, 'reason required');
@@ -749,7 +819,7 @@ async function api(req, res, url) {
       break;
     }
     case 'reopen': {
-      forbid(me, 'tester', 'admin');
+      forbidIn(me, card.project, 'tester', 'admin');
       card.status = card.assignees.length ? 'in_progress' : 'open';
       log(card, user, 'reopened', clean(body.text));
       break;
@@ -784,12 +854,14 @@ function serveStatic(req, res, url) {
 }
 
 // Remote MCP (Streamable HTTP, stateless). Auth: "Authorization: Bearer <personal token>".
-async function mcp(req, res) {
+async function mcp(req, res, url) {
   const token = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1] || '';
   const u = token && db.users.find((x) => x.token === token);
   if (!u) { res.setHeader('WWW-Authenticate', 'Bearer'); return sendJson(res, 401, { error: 'Missing or invalid token' }); }
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'Use POST' });
-  const server = createMcpServer({ base: `http://127.0.0.1:${PORT}`, token });
+  const project = clean(url.searchParams.get('project'), 60); // /mcp?project=alpha pins Claude to one project
+  if (project && !roleIn(u, project)) return sendJson(res, 403, { error: 'You are not a member of this project' });
+  const server = createMcpServer({ base: `http://127.0.0.1:${PORT}`, token, project });
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => { transport.close(); server.close(); });
   await server.connect(transport);
@@ -800,7 +872,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }); res.end('ok'); }
-    else if (url.pathname === '/mcp') await mcp(req, res);
+    else if (url.pathname === '/mcp') await mcp(req, res, url);
     else if (url.pathname.startsWith('/api/')) await api(req, res, url);
     else serveStatic(req, res, url);
   } catch (e) {

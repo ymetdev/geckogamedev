@@ -11,19 +11,26 @@ const brief = (c) => ({
   parent: c.parent || undefined, attachments: c.files?.length || undefined,
 });
 
-export function createServer({ base, token }) {
+export function createServer({ base, token, project = '' }) {
   async function call(method, path, body) {
     const res = await fetch(base.replace(/\/$/, '') + '/api' + path, {
       method,
-      headers: { 'Content-Type': 'application/json', 'x-devboard-token': token },
+      headers: { 'Content-Type': 'application/json', 'x-devboard-token': token, ...(project && { 'x-devboard-project': project }) },
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     return data;
   }
+  let keyCache = { at: 0, map: {} };
+  async function keys() { // project id -> key (for refs like ALPHA-12), cached briefly
+    if (Date.now() - keyCache.at > 60000) { const me = await call('GET', '/me'); keyCache = { at: Date.now(), map: Object.fromEntries(me.projects.map((p) => [p.id, p.key])) }; }
+    return keyCache.map;
+  }
+  const withRef = async (c) => ({ ...brief(c), ref: `${(await keys())[c.project] || '?'}-${c.num ?? c.id}`, project: c.project });
   const server = new McpServer({ name: 'geckoboard', version: '1.0.0' }, {
     instructions:
+      (project ? `This connection is pinned to project "${project}": you only see and change that project's cards. ` : 'The user may belong to several projects; each card shows its project and ref (e.g. ALPHA-12). Use a project-pinned connection (/mcp?project=...) when working inside one game repo. ') +
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
       'for details (use get_attachment to look at screenshots on the card), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
@@ -32,10 +39,15 @@ export function createServer({ base, token }) {
       'No code, file, class or function names: describe what the tester does and sees in the game. One action per step, 3-6 steps, each step like "ทำ... → ควรเห็น: ...". The summary is 1-2 short Thai sentences saying what changed in plain words.',
   });
 
+  server.registerTool('list_projects', {
+    description: 'List the projects the current user belongs to (id, key, name, role). Cards are numbered per project, e.g. ALPHA-12.',
+    inputSchema: {},
+  }, wrap(async () => (await call('GET', '/me')).projects));
+
   server.registerTool('list_my_cards', {
     description: 'List cards the current dev claimed (default: in_progress). Use this when the user says "do my tasks".',
     inputSchema: { status: z.enum(['open', 'in_progress', 'ready_to_test', 'complete']).optional().describe('Default in_progress') },
-  }, wrap(async ({ status }) => (await call('GET', `/cards?assignee=${encodeURIComponent((await call('GET', '/me')).email)}&status=${status || 'in_progress'}`)).map(brief)));
+  }, wrap(async ({ status }) => Promise.all((await call('GET', `/cards?assignee=${encodeURIComponent((await call('GET', '/me')).email)}&status=${status || 'in_progress'}`)).map(withRef))));
 
   server.registerTool('list_cards', {
     description: 'List cards on the board with optional filters.',
@@ -49,7 +61,7 @@ export function createServer({ base, token }) {
     if (type) q.set('type', type);
     if (status) q.set('status', status);
     if (unassigned) q.set('unassigned', '1');
-    return (await call('GET', `/cards?${q}`)).map(brief);
+    return Promise.all((await call('GET', `/cards?${q}`)).map(withRef));
   }));
 
   server.registerTool('get_card', {
@@ -63,7 +75,7 @@ export function createServer({ base, token }) {
   }, wrap(async ({ ids }) => {
     const out = [];
     for (const id of ids) {
-      try { out.push(brief(await call('POST', `/cards/${id}/claim`, {}))); }
+      try { out.push(await withRef(await call('POST', `/cards/${id}/claim`, {}))); }
       catch (e) { out.push({ id, error: e.message }); } // e.g. "Already claimed by Smart": report, keep going
     }
     return out;
@@ -78,12 +90,12 @@ export function createServer({ base, token }) {
       summary: z.string().describe('THAI, plain words, 1-2 short sentences: what changed (no code terms)'),
       test_steps: z.array(z.string()).min(1).describe('THAI, very short, simple words, 3-6 steps, each "ทำ... → ควรเห็น: ..."; no code or file names'),
     },
-  }, wrap(async ({ id, summary, test_steps }) => brief(await call('POST', `/cards/${id}/ready`, { summary, test_steps }))));
+  }, wrap(async ({ id, summary, test_steps }) => withRef(await call('POST', `/cards/${id}/ready`, { summary, test_steps }))));
 
   server.registerTool('add_comment', {
     description: 'Add a progress note/question to a card (e.g. when blocked or needs info).',
     inputSchema: { id: z.number().int(), text: z.string() },
-  }, wrap(({ id, text }) => call('POST', `/cards/${id}/comment`, { text }).then(brief)));
+  }, wrap(({ id, text }) => call('POST', `/cards/${id}/comment`, { text }).then(withRef)));
 
   server.registerTool('get_attachment', {
     description: 'View an image attached to a card (e.g. a bug screenshot). Use get_card first to see the file ids. Videos cannot be viewed.',
@@ -115,7 +127,7 @@ export function createServer({ base, token }) {
       milestone: z.string().optional(),
       parent: z.number().int().optional().describe('Parent card id (makes this a sub-card)'),
     },
-  }, wrap((a) => call('POST', '/cards', a).then(brief)));
+  }, wrap((a) => call('POST', '/cards', a).then(withRef)));
 
   server.registerPrompt('do_my_cards', {
     description: 'Fix all cards I claimed and mark them ready to test',
