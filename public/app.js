@@ -263,9 +263,9 @@ async function menuAct(m) {
   if (m === 'install' && installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; renderUserBox(); }
 }
 function renderTeam() {
-  $('#teamList').innerHTML = users.map((u) => `<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span>
+  $('#teamList').innerHTML = users.map((u) => `<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span>${u.discord_id ? ' <span class="meta" title="Discord ID ' + esc(u.discord_id) + '">🔔</span>' : ''}</span>
     <select data-e="${esc(u.email)}">${['admin', 'dev', 'tester'].map((r) => `<option ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}</select>
-    <button class="btn" data-ren="${esc(u.email)}" title="${t('menu_rename')}">✎</button><button class="btn bad" data-del="${esc(u.email)}">${t('remove')}</button></div>`).join('');
+    <button class="btn" data-did="${esc(u.email)}" title="${t('discord_btn')}">@</button><button class="btn" data-ren="${esc(u.email)}" title="${t('menu_rename')}">✎</button><button class="btn bad" data-del="${esc(u.email)}">${t('remove')}</button></div>`).join('');
   $$('#teamList select').forEach((sel) => (sel.onchange = async () => {
     try { await api('PATCH', '/users/' + encodeURIComponent(sel.dataset.e), { role: sel.value }); $('#teamErr').textContent = ''; await load(); if (sel.dataset.e === user.email) user.role = sel.value; }
     catch (e) { $('#teamErr').textContent = e.message; await load(); renderTeam(); }
@@ -273,6 +273,10 @@ function renderTeam() {
   $$('#teamList [data-ren]').forEach((b) => (b.onclick = async () => {
     const u = users.find((x) => x.email === b.dataset.ren); const name = prompt(t('rename_prompt', u?.name || b.dataset.ren), u?.name || ''); if (!name || name.trim() === u?.name) return;
     try { await api('PATCH', '/users/' + encodeURIComponent(b.dataset.ren), { name }); $('#teamErr').textContent = ''; await load(true); renderTeam(); if (b.dataset.ren === user.email) { user.name = name.trim(); renderUserBox(); } } catch (e) { $('#teamErr').textContent = e.message; }
+  }));
+  $$('#teamList [data-did]').forEach((b) => (b.onclick = async () => {
+    const u = users.find((x) => x.email === b.dataset.did); const v = prompt(t('discord_prompt', u?.name || b.dataset.did), u?.discord_id || ''); if (v === null || v.trim() === (u?.discord_id || '')) return;
+    try { await api('PATCH', '/users/' + encodeURIComponent(b.dataset.did), { discord_id: v.trim() }); $('#teamErr').textContent = ''; await load(true); renderTeam(); } catch (e) { $('#teamErr').textContent = e.message; }
   }));
   $$('#teamList [data-del]').forEach((b) => (b.onclick = async () => {
     if (!confirm(t('confirm_remove', b.dataset.del))) return;

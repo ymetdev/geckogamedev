@@ -94,9 +94,11 @@
   <form class="row" id="addUserForm" style="margin-top:6px">
     <input name="email" type="email" data-i18n-ph="ph_email" required style="flex:2;min-width:140px">
     <input name="name" data-i18n-ph="ph_name" style="flex:1;min-width:90px">
+    <input name="discord_id" inputmode="numeric" data-i18n-ph="ph_discord" style="flex:1;min-width:110px">
     <select name="role"><option>dev</option><option>tester</option><option>admin</option></select>
     <button class="btn primary" data-i18n="add"></button>
   </form>
+  <div class="meta" data-i18n="discord_hint" style="margin-top:6px"></div>
   <div class="err" id="teamErr"></div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#teamDlg').close()" data-i18n="close"></button></div>
 </div></dialog>

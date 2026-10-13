@@ -132,6 +132,10 @@ function checkName(raw, exceptEmail) {
 }
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const publicUser = (u) => ({ email: u.email, name: u.name, role: u.role });
+// Discord user IDs are only shown to admins (and to the person themself)
+const adminUser = (u) => ({ ...publicUser(u), discord_id: u.discord_id || '' });
+const usersFor = (me) => db.users.map((u) => (me.role === 'admin' || me.email === u.email ? adminUser(u) : publicUser(u)));
+const cleanDiscordId = (v) => { const d = String(v ?? '').trim().replace(/^<@!?(\d+)>$/, '$1'); need(d === '' || /^\d{15,25}$/.test(d), 400, 'Invalid Discord user ID'); return d; };
 function parseCookies(req) {
   return Object.fromEntries((req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]));
 }
@@ -161,21 +165,28 @@ const COLORS = { ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ad
 const DTXT = {
   en: { ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned', deleted: '🗑 Card deleted',
     dev: 'Dev', by: 'By', type: 'Type', priority: 'Priority', due: 'Due', ms: 'Milestone', tags: 'Tags', desc: 'Description', summary: 'What was done', steps: 'How to test',
-    ping: '🧪 Card {0} is ready for testing!', more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
+    ping: '🧪 Card {0} is ready for testing!', pingFail: '❌ Card {0} failed testing — please take a look', pingMention: '💬 You were mentioned on card {0}', more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
     st: { open: 'Open', in_progress: 'In Progress', ready_to_test: 'Ready to Test', complete: 'Complete' }, pri: { low: 'low', medium: 'medium', high: 'high', critical: 'critical' } },
   th: { ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ', deleted: '🗑 ลบการ์ดแล้ว',
     dev: 'Dev', by: 'โดย', type: 'ประเภท', priority: 'ความสำคัญ', due: 'กำหนดส่ง', ms: 'Milestone', tags: 'Tag', desc: 'รายละเอียด', summary: 'สิ่งที่ทำ', steps: 'วิธีเทส',
-    ping: '🧪 การ์ด {0} พร้อมให้เทสแล้ว!', more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
+    ping: '🧪 การ์ด {0} พร้อมให้เทสแล้ว!', pingFail: '❌ การ์ด {0} เทสไม่ผ่าน ช่วยดูหน่อย', pingMention: '💬 มีคนแท็กคุณในการ์ด {0}', more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
     st: { open: 'เปิด', in_progress: 'กำลังทำ', ready_to_test: 'พร้อมเทส', complete: 'เสร็จสิ้น' }, pri: { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สูง', critical: 'วิกฤต' } },
 }[DLANG];
 const PRI_ICON = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' };
 const cut = (s, n) => { s = String(s || '').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-function notify(event, card, actor, text = '') {
+function notify(event, card, actor, text = '', who = []) {
   const proj = projOf(card.project);
   const hook = proj?.discord_webhook || DISCORD_WEBHOOK_URL, roleId = (proj?.discord_tester_role || DISCORD_TESTER_ROLE_ID || '').replace(/\D/g, '');
   if (!hook) return;
   const url = PUBLIC_URL ? `${PUBLIC_URL}/#card-${card.id}` : '';
-  const ping = event === 'ready_to_test' && !!roleId;
+  // Tag only the right people: individuals with a Discord ID; the tester role is only a fallback for "ready to test"
+  const idOf = (e) => (db.users.find((u) => u.email === e)?.discord_id || '').replace(/\D/g, '');
+  let people = [];
+  if (event === 'ready_to_test') people = Object.entries(proj?.members || {}).filter(([, r]) => r === 'tester').map(([e]) => e);
+  else if (event === 'test_failed') people = card.assignees;
+  else if (event === 'mention') people = who;
+  const userIds = [...new Set(people.filter((e) => e !== actor).map(idOf).filter(Boolean))];
+  const ping = event === 'ready_to_test' && !userIds.length && !!roleId;
   const owner = card.assignees[0] ? nameOfUser(card.assignees[0]) : DTXT.unassigned;
   const fields = [
     { name: DTXT.type, value: `${card.type === 'ticket' ? '🎫 Ticket' : '📋 Task'}`, inline: true },
@@ -209,9 +220,11 @@ function notify(event, card, actor, text = '') {
   };
   fetch(hook, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(ping
-      ? { content: `<@&${roleId}> ${DTXT.ping.replace('{0}', refOf(card))}`, embeds: [embed], allowed_mentions: { roles: [roleId] } }
-      : { embeds: [embed], allowed_mentions: { parse: [] } }),
+    body: JSON.stringify(userIds.length
+      ? { content: `${userIds.map((i) => `<@${i}>`).join(' ')} ${(event === 'ready_to_test' ? DTXT.ping : event === 'test_failed' ? DTXT.pingFail : DTXT.pingMention).replace('{0}', refOf(card))}`, embeds: [embed], allowed_mentions: { users: userIds } }
+      : ping
+        ? { content: `<@&${roleId}> ${DTXT.ping.replace('{0}', refOf(card))}`, embeds: [embed], allowed_mentions: { roles: [roleId] } }
+        : { embeds: [embed], allowed_mentions: { parse: [] } }),
     signal: AbortSignal.timeout(5000),
   }).catch((e) => console.error('Discord notify failed:', e.message));
 }
@@ -463,7 +476,7 @@ async function api(req, res, url) {
 
   // ---- users ----
   if (parts[0] === 'users') {
-    if (parts.length === 1 && method === 'GET') return sendJson(res, 200, db.users.map(publicUser));
+    if (parts.length === 1 && method === 'GET') return sendJson(res, 200, usersFor(me));
     forbid(me, 'admin');
     const email = clean(parts[1] ? decodeURIComponent(parts[1]) : body.email, 120).toLowerCase();
     if (method === 'POST' && parts.length === 1) {
@@ -471,10 +484,11 @@ async function api(req, res, url) {
       need(!db.users.some((u) => u.email === email), 409, 'Email already registered');
       need(ROLES.includes(body.role), 400, 'Invalid role');
       const u = newUser(email, clean(body.name, 60) || email.split('@')[0], body.role);
+      if (body.discord_id !== undefined) u.discord_id = cleanDiscordId(body.discord_id);
       db.users.push(u);
       const tp = projOf(clean(body.project, 60)); if (tp && body.role !== 'admin') (tp.members ||= {})[email] = body.role; // joins the project it was added from
       await save();
-      return sendJson(res, 201, publicUser(u));
+      return sendJson(res, 201, adminUser(u));
     }
     const u = db.users.find((x) => x.email === email);
     need(u, 404, 'User not found');
@@ -486,8 +500,9 @@ async function api(req, res, url) {
         u.role = body.role;
       }
       if (body.name !== undefined) u.name = checkName(body.name, u.email);
+      if (body.discord_id !== undefined) u.discord_id = cleanDiscordId(body.discord_id);
       await save();
-      return sendJson(res, 200, publicUser(u));
+      return sendJson(res, 200, adminUser(u));
     }
     if (method === 'DELETE') {
       need(!(u.role === 'admin' && admins.length === 1), 409, 'Cannot remove the last admin');
@@ -596,7 +611,7 @@ async function api(req, res, url) {
   }
   if (parts[0] === 'state' && method === 'GET') { // cheap poll: nothing is sent back if nothing changed
     if (Number(url.searchParams.get('since')) === rev) return sendJson(res, 200, { rev, unchanged: true });
-    return sendJson(res, 200, { rev, cards: visibleCards(me, pj), projects: myProjects(me), users: db.users.map(publicUser) });
+    return sendJson(res, 200, { rev, cards: visibleCards(me, pj), projects: myProjects(me), users: usersFor(me) });
   }
   if (parts[0] === 'trash' && parts[2] === 'restore' && method === 'POST') {
     const card = db.trash.find((c) => c.id === Number(parts[1]));
@@ -843,7 +858,7 @@ async function api(req, res, url) {
       const mentions = findMentions(text);
       card.comments.push({ at: now(), user, text, mentions });
       log(card, user, 'commented');
-      if (mentions.length) notify('mention', card, user, `${mentions.map((e) => '@' + nameOfUser(e)).join(' ')} — ${text}`);
+      if (mentions.length) notify('mention', card, user, `${mentions.map((e) => '@' + nameOfUser(e)).join(' ')} — ${text}`, mentions);
       break;
     }
     default: throw new HttpError(404, 'Unknown action');

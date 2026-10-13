@@ -296,3 +296,15 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
 .mrow{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}.mrow .e{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.mrow select{width:auto;height:34px}
 .prow{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}.prow b{font-size:15px}.prow .meta{display:block}
 .keybadge{font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:1px 8px;border-radius:999px;background:var(--surface3);border:1px solid var(--line2);color:var(--text2);margin-left:6px}
+
+/* ---------- tall portrait screens (e.g. 1080x1920 wall display / kiosk) ---------- */
+@media(orientation:portrait) and (min-width:900px) and (min-height:1400px){
+  body{zoom:1.25;height:calc(100dvh / 1.25)}
+  .brand-name{display:inline}
+  .need .lbl{display:inline}
+  main{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));overflow:hidden;gap:14px;padding:14px 16px 16px;scroll-snap-type:none}
+  .col h2{font-size:14.5px}
+  .colbody{padding:2px 12px 14px}
+  .onb{grid-column:1/-1;grid-row:1/-1}
+  dialog{max-height:90vh}
+}
