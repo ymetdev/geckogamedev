@@ -49,7 +49,7 @@ const ERRS = [[/^Not logged in/, 'e_login'], [/^Role "(.+)" is not allowed/, 'e_
   [/^Not your card/, 'e_notyours'], [/^Only an assignee/, 'e_assignee'], [/^Card must be in progress/, 'e_inprog'], [/^test_steps required/, 'e_steps'], [/^Card is not ready to test/, 'e_notready'], [/^reason required/, 'e_reason'],
   [/^text required/, 'e_text'], [/^title required/, 'e_title'], [/^Only the reporter, the owner/, 'e_edit'], [/^File too large \(max (\d+) MB\)/, 'e_toolarge'], [/^Only PNG\/JPEG/, 'e_filetype'], [/^Max (\d+) files per card/, 'e_maxfiles'],
   [/^Empty file/, 'e_empty'], [/^File not found/, 'e_nofile'], [/recycled/i, 'e_recycled'], [/^A card cannot be its own parent/, 'e_selfparent'], [/^Invalid date/, 'e_date'], [/^Parent card #(\d+) not found/, 'e_noparent'],
-  [/^Cannot remove the last admin/, 'e_lastadmin'], [/^Email already registered/, 'e_dupemail'], [/^(Invalid email|Enter a valid email)/, 'e_email'], [/^Invalid role/, 'e_badrole'], [/^(.+) is not registered\./, 'e_unreg'],
+  [/^Cannot remove the last admin/, 'e_lastadmin'], [/^Email already registered/, 'e_dupemail'], [/^(Invalid email|Enter a valid email)/, 'e_email'], [/^Invalid role/, 'e_badrole'], [/^Display name already in use/, 'e_nametaken'], [/^(.+) is not registered\./, 'e_unreg'],
   [/^(Invalid Google token|Invalid token issuer|Google email not verified)/, 'e_google'], [/^Email-only login is disabled/, 'e_emaillogin'], [/^Nothing to undo/, 'e_noundo'], [/^Someone else already took/, 'e_taken'],
   [/^This cannot be undone/, 'e_cantundo'], [/^Nothing to restore/, 'e_norestore'], [/^Only the uploader or an admin/, 'e_uploader'], [/^The original was already recycled/, 'e_origrecycled']];
 // loading feedback: a thin top bar for slow requests, and buttons that spin + ignore repeat clicks while their request runs
@@ -213,6 +213,7 @@ function renderUserBox() {
   const u = user;
   $('#userBox').innerHTML = `<div class="chip" id="chip" role="button" tabindex="0" aria-label="${esc(u.name)}"><span class="av" style="background:hsl(${hue(u.email)} 45% 40%)">${esc([...u.name][0]?.toUpperCase() || '?')}</span><span>${esc(u.name)}</span><span class="role ${roleOf(curPid()) || u.role}">${roleOf(curPid()) || u.role}</span></div>
    <div class="menu" id="menu">
+     <button data-m="rename">✎ ${t('menu_rename')}</button>
      <button data-m="token">${t('menu_token')}</button>
      ${u.role === 'admin' ? `<button data-m="projects">${t('menu_projects')}</button><button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button><button data-m="backup">${t('menu_backup')}</button>` : ''}
      ${installEvt ? `<button data-m="install">📲 ${t('menu_install')}</button>` : ''}
@@ -254,6 +255,7 @@ $('#rotateBtn').onclick = () => { if (!confirm(t('confirm_rotate'))) return; wit
 async function menuAct(m) {
   if (m === 'out') { await api('POST', '/logout', {}); showLogin(); }
   if (m === 'token') { const me = await api('GET', '/me'); showToken(me.token, true); $('#tokenDlg').showModal(); }
+  if (m === 'rename') { const f = $('#nameForm'); f.reset(); f.name.value = user.name; $('#nameErr').textContent = ''; $('#nameDlg').showModal(); f.name.select(); }
   if (m === 'projects') { projEdit = null; await renderProjects(); $('#projDlg').showModal(); }
   if (m === 'team') { renderTeam(); $('#teamDlg').showModal(); }
   if (m === 'storage') { await renderStorage(); $('#storDlg').showModal(); }
@@ -263,10 +265,14 @@ async function menuAct(m) {
 function renderTeam() {
   $('#teamList').innerHTML = users.map((u) => `<div class="trow"><span class="e">${esc(u.name)} <span class="meta">${esc(u.email)}</span></span>
     <select data-e="${esc(u.email)}">${['admin', 'dev', 'tester'].map((r) => `<option ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}</select>
-    <button class="btn bad" data-del="${esc(u.email)}">${t('remove')}</button></div>`).join('');
+    <button class="btn" data-ren="${esc(u.email)}" title="${t('menu_rename')}">✎</button><button class="btn bad" data-del="${esc(u.email)}">${t('remove')}</button></div>`).join('');
   $$('#teamList select').forEach((sel) => (sel.onchange = async () => {
     try { await api('PATCH', '/users/' + encodeURIComponent(sel.dataset.e), { role: sel.value }); $('#teamErr').textContent = ''; await load(); if (sel.dataset.e === user.email) user.role = sel.value; }
     catch (e) { $('#teamErr').textContent = e.message; await load(); renderTeam(); }
+  }));
+  $$('#teamList [data-ren]').forEach((b) => (b.onclick = async () => {
+    const u = users.find((x) => x.email === b.dataset.ren); const name = prompt(t('rename_prompt', u?.name || b.dataset.ren), u?.name || ''); if (!name || name.trim() === u?.name) return;
+    try { await api('PATCH', '/users/' + encodeURIComponent(b.dataset.ren), { name }); $('#teamErr').textContent = ''; await load(true); renderTeam(); if (b.dataset.ren === user.email) { user.name = name.trim(); renderUserBox(); } } catch (e) { $('#teamErr').textContent = e.message; }
   }));
   $$('#teamList [data-del]').forEach((b) => (b.onclick = async () => {
     if (!confirm(t('confirm_remove', b.dataset.del))) return;
@@ -290,6 +296,16 @@ async function renderStorage() {
 $('#storClean').onclick = () => withBusy($('#storClean'), async () => {
   try { const r = await api('POST', '/storage/recycle', {}); await renderStorage(); await load(); toast(r.purged ? t('cleaned', fmtB(r.freed)) : t('nothing_to_clean')); } catch (e) { toast(e.message); }
 });
+// ---------- change my display name ----------
+$('#nameCancel').onclick = () => $('#nameDlg').close();
+$('#nameForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const f = e.target;
+  await withBusy(f, async () => {
+    try { const me = await api('PATCH', '/me', { name: f.name.value }); user.name = me.name; $('#nameDlg').close(); renderUserBox(); await load(true); toast(t('rename_saved')); }
+    catch (er) { $('#nameErr').textContent = er.message; }
+  }, f.querySelector('button.primary'));
+});
+
 // ---------- projects (admin) ----------
 let projEdit = null; // null = list, 'new' = create form, <id> = editing that project
 async function renderProjects() {

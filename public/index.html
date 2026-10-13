@@ -267,6 +267,10 @@
 <dialog id="viewDlg"><div class="dlg" id="viewBody"></div></dialog>
 <dialog id="sumDlg"><div class="dlg"><h3 data-i18n="summary"></h3><div id="sumBody" class="help" style="max-height:72vh"></div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#sumDlg').close()" data-i18n="close"></button></div></div></dialog>
+<dialog id="nameDlg"><form class="dlg" id="nameForm"><h3 data-i18n="rename_title"></h3>
+  <label><span data-i18n="rename_label"></span><input name="name" required maxlength="40" autocomplete="off"></label>
+  <div class="meta" data-i18n="rename_hint"></div><div class="err" id="nameErr"></div>
+  <div class="actions"><span class="sp"></span><button type="button" class="btn" id="nameCancel" data-i18n="cancel"></button><button class="btn primary" data-i18n="save"></button></div></form></dialog>
 <dialog id="projDlg"><div class="dlg"><h3 data-i18n="projects_title"></h3><div id="projBody" style="display:flex;flex-direction:column;gap:12px"></div>
   <div class="actions"><span class="sp"></span><button class="btn" onclick="$('#projDlg').close()" data-i18n="close"></button></div></div></dialog>
 <dialog id="bkDlg"><div class="dlg"><h3 data-i18n="bk_title"></h3>

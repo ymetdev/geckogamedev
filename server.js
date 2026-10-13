@@ -122,6 +122,14 @@ import crypto from 'node:crypto';
 function newUser(email, name, role) {
   return { email, name, role, token: crypto.randomBytes(24).toString('hex'), created_at: new Date().toISOString() };
 }
+// display names must be unique (ignoring case and spaces) because "@name" mentions are matched against them
+const nameKey = (n) => String(n).toLowerCase().replace(/\s+/g, '');
+function checkName(raw, exceptEmail) {
+  const name = String(raw ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  need(name.length >= 1, 400, 'Display name required');
+  need(!db.users.some((u) => u.email !== exceptEmail && nameKey(u.name) === nameKey(name)), 409, 'Display name already in use');
+  return name;
+}
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const publicUser = (u) => ({ email: u.email, name: u.name, role: u.role });
 function parseCookies(req) {
@@ -446,6 +454,11 @@ async function api(req, res, url) {
     await save();
     return sendJson(res, 200, { token: me.token });
   }
+  if (parts[0] === 'me' && method === 'PATCH') { // change my own display name
+    me.name = checkName(body.name, me.email);
+    await save();
+    return sendJson(res, 200, { ...publicUser(me), token: me.token, projects: myProjects(me) });
+  }
   if (parts[0] === 'me' && method === 'GET') return sendJson(res, 200, { ...publicUser(me), token: me.token, projects: myProjects(me) });
 
   // ---- users ----
@@ -472,7 +485,7 @@ async function api(req, res, url) {
         need(!(u.role === 'admin' && body.role !== 'admin' && admins.length === 1), 409, 'Cannot remove the last admin');
         u.role = body.role;
       }
-      if (body.name !== undefined) u.name = clean(body.name, 60) || u.name;
+      if (body.name !== undefined) u.name = checkName(body.name, u.email);
       await save();
       return sendJson(res, 200, publicUser(u));
     }
