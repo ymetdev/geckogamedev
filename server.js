@@ -619,6 +619,9 @@ async function api(req, res, url) {
     if (Number(url.searchParams.get('since')) === rev) return sendJson(res, 200, { rev, unchanged: true });
     return sendJson(res, 200, { rev, cards: visibleCards(me, pj), projects: myProjects(me), users: usersFor(me) });
   }
+  if (parts[0] === 'trash' && parts.length === 1 && method === 'GET') { // deleted cards you may restore (dev/admin of that project)
+    return sendJson(res, 200, db.trash.filter((c) => ['dev', 'admin'].includes(roleIn(me, c.project)) && (!pj || c.project === pj)).map((c) => ({ id: c.id, project: c.project, num: c.num, title: c.title, type: c.type, status: c.status, deleted_at: c.deleted_at, deleted_by: c.deleted_by })));
+  }
   if (parts[0] === 'trash' && parts[2] === 'restore' && method === 'POST') {
     const card = db.trash.find((c) => c.id === Number(parts[1]));
     need(card, 404, 'Nothing to restore (it may have been removed for good)');

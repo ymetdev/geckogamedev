@@ -244,6 +244,45 @@ export function createServer({ base, token, project = '' }) {
       'Never invent values; skip things you cannot read. Do not use replace unless asked. Finish with a short Thai summary: which tables, how many rows, what you skipped.' } }],
   }));
 
+  // ---- card edit / delete / restore / release / link ----
+  server.registerTool('update_card', {
+    description: 'Edit a card\'s fields (reporter, owner or admin only): title, description, type, priority, tags (replaces all tags), due (YYYY-MM-DD, "" clears), milestone ("" clears), parent (card id; null makes it top-level). Only the fields you pass change. Use mark_ready_for_test / claim_cards for status changes. If the user did not say exactly what to change, ASK first.',
+    inputSchema: {
+      id: z.number().int(), title: z.string().optional(), description: z.string().optional(), type: z.enum(['ticket', 'task']).optional(),
+      priority: z.enum(['low', 'medium', 'high', 'critical']).optional(), tags: z.array(z.string()).optional(),
+      due: z.string().optional(), milestone: z.string().optional(), parent: z.number().int().nullable().optional(),
+    },
+  }, wrap(async ({ id, ...fields }) => withRef(await call('PATCH', `/cards/${id}`, fields))));
+
+  server.registerTool('delete_card', {
+    description: 'Delete a card (dev/admin). It goes to the trash and can be restored for 7 days (restore_card); the team is notified on Discord. Sub-cards and links are kept. Only when the user clearly asked; if unsure which card, ASK first.',
+    inputSchema: { id: z.number().int(), confirm_title: z.string().describe('The card\'s exact current title (read it with get_card and confirm with the user)') },
+  }, wrap(async ({ id, confirm_title }) => {
+    const c = await call('GET', `/cards/${id}`);
+    if (c.title !== confirm_title) throw new Error(`confirm_title must equal the card title ("${c.title}"). Ask the user before deleting.`);
+    await call('DELETE', `/cards/${id}`); return { deleted: id, title: c.title, restorable_days: 7 };
+  }));
+
+  server.registerTool('list_trash', {
+    description: 'List deleted cards that can still be restored (dev/admin), newest first.',
+    inputSchema: {},
+  }, wrap(async () => (await call('GET', '/trash')).sort((a, b) => b.deleted_at.localeCompare(a.deleted_at))));
+
+  server.registerTool('restore_card', {
+    description: 'Restore a deleted card from the trash (dev/admin). Get ids from list_trash.',
+    inputSchema: { id: z.number().int() },
+  }, wrap(async ({ id }) => withRef(await call('POST', `/trash/${id}/restore`, {}))));
+
+  server.registerTool('release_card', {
+    description: 'Give a card back (un-claim): the owner releases their own card; an admin may pass `email` to release someone else\'s. An in-progress card with no owner goes back to open.',
+    inputSchema: { id: z.number().int(), email: z.string().optional().describe('Admin only: whose claim to remove') },
+  }, wrap(async ({ id, email }) => withRef(await call('POST', `/cards/${id}/unclaim`, email ? { email } : {}))));
+
+  server.registerTool('link_cards', {
+    description: 'Link two cards of the same project as related (two-way), or remove the link with remove=true. For parent/sub-card use update_card parent.',
+    inputSchema: { id: z.number().int(), other: z.number().int().describe('Id of the other card'), remove: z.boolean().optional() },
+  }, wrap(async ({ id, other, remove }) => withRef(await call('POST', `/cards/${id}/${remove ? 'unlink' : 'link'}`, { id: other }))));
+
   server.registerPrompt('do_my_cards', {
     description: 'Fix all cards I claimed and mark them ready to test',
   }, () => ({

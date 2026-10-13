@@ -17,6 +17,8 @@ Kanban สำหรับทีมทำเกม: **Ticket + Task** → Dev ก
 - "ทำ card ที่ฉัน mark ไว้ทั้งหมด"  (multiple)
 - "ทำ #12 ให้หน่อย"  (single)
 
+เครื่องมือจัดการการ์ดผ่าน MCP (CRUD ครบ): สร้าง `create_card` · อ่าน `list_cards`, `list_my_cards`, `get_card`, `get_attachment`, `list_trash` · แก้ `update_card` (ชื่อ/รายละเอียด/ประเภท/ความสำคัญ/แท็ก/กำหนดส่ง/milestone/การ์ดแม่), `claim_cards`, `release_card`, `link_cards`, `mark_ready_for_test`, `add_comment` · ลบ `delete_card` (ลงถังขยะ ต้องส่งชื่อการ์ดยืนยัน) และกู้ด้วย `restore_card` (ภายใน 7 วัน) — สิทธิ์เหมือนบนเว็บ
+
 Claude จะเรียก `list_my_cards` → `get_card` → แก้โค้ด → `mark_ready_for_test`
 (บังคับให้มี summary + ขั้นตอนเทส) ถ้า Tester กด Fail การ์ดกลับไป In Progress พร้อมเหตุผลเป็น comment
 ซึ่ง Claude อ่านได้จาก `get_card`
