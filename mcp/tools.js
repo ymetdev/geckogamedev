@@ -159,6 +159,36 @@ export function createServer({ base, token, project = '' }) {
     inputSchema: { table: z.string(), values: z.record(z.union([z.string(), z.number(), z.boolean()])) },
   }, wrap(async ({ table, values }) => ({ added: (await call('POST', `/tables/${encodeURIComponent(table)}/rows`, { cells: values })).id })));
 
+  server.registerTool('create_table', {
+    description: 'Create a game-data table (dev/admin only), e.g. Monsters, Zones, Items. The FIRST column is the row name. Column types: text, number, select (give options), bool. Then fill it with import_rows. Check list_tables first so you do not duplicate an existing table.',
+    inputSchema: {
+      name: z.string(),
+      project: z.string().optional().describe('Project id (needed only if this connection is not pinned to one project; see list_projects)'),
+      columns: z.array(z.object({ name: z.string(), type: z.enum(['text', 'number', 'select', 'bool']).optional(), options: z.array(z.string()).optional() })).min(1),
+    },
+  }, wrap(async ({ name, project: p, columns }) => {
+    const t = await call('POST', '/tables', { name, project: p || project || undefined, columns });
+    return { id: t.id, name: t.name, columns: t.columns.map((c) => c.name) };
+  }));
+
+  server.registerTool('import_rows', {
+    description: 'Bulk-add rows to a game-data table (dev/admin only), up to 2000 per call. Use this to copy data you read from the game repo (JSON/CSV/ScriptableObjects/constants) into a table. Keys are column NAMES. Unknown column names are created automatically (numbers detected). replace=true deletes ALL existing rows first, so only use it when the user asked for a full re-sync.',
+    inputSchema: { table: z.string(), rows: z.array(z.record(z.union([z.string(), z.number(), z.boolean()]))).min(1).max(2000), replace: z.boolean().optional() },
+  }, wrap(async ({ table, rows, replace }) => {
+    const t = await call('POST', `/tables/${encodeURIComponent(table)}/import`, { rows, replace: !!replace, create_columns: true });
+    return { table: t.id, total_rows: t.rows.length, columns: t.columns.map((c) => `${c.name}:${c.type}`) };
+  }));
+
+  server.registerPrompt('import_game_data', {
+    description: 'Scan this game repo for balance data (monsters, items, zones, skills…) and put it into GeckoBoard tables',
+    argsSchema: { what: z.string().optional().describe('What to import, e.g. "monster stats" (default: look for balance data)') },
+  }, ({ what }) => ({
+    messages: [{ role: 'user', content: { type: 'text', text:
+      `Find the game's data for: ${what || 'balance data (monsters, items, zones, skills, drops…)'} in this repo (data files, ScriptableObjects, JSON/CSV, constants). ` +
+      'First call list_tables so you do not duplicate or overwrite tables. For each group of similar records: create_table with sensible columns (first column = name; use number for stats, select for fixed categories like element/rarity), then import_rows with the real values. ' +
+      'Never invent values; skip things you cannot read. Do not use replace unless asked. Finish with a short Thai summary: which tables, how many rows, what you skipped.' } }],
+  }));
+
   server.registerPrompt('do_my_cards', {
     description: 'Fix all cards I claimed and mark them ready to test',
   }, () => ({

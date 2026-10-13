@@ -735,7 +735,7 @@ async function api(req, res, url) {
       if (body.create_columns) { // add unknown column names as text columns (numbers are detected)
         const known = new Set(t.columns.map((c) => c.name.toLowerCase()));
         const add = [];
-        for (const k of Object.keys(rows[0] || {})) if (!known.has(k.toLowerCase())) add.push(k);
+        for (const r of rows) for (const k of Object.keys(r || {})) if (!known.has(k.toLowerCase()) && !add.some((a) => a.toLowerCase() === k.toLowerCase())) add.push(k);
         if (add.length) {
           const cols = [...t.columns, ...add.map((name) => ({ name, type: rows.every((r) => r[name] === '' || r[name] == null || Number.isFinite(Number(String(r[name]).replace(/,/g, '')))) ? 'number' : 'text' }))];
           t.columns = cleanCols(t, cols);
