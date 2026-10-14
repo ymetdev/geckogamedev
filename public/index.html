@@ -178,6 +178,9 @@
       <li>Dev/Admin: สร้างตาราง กำหนดคอลัมน์เอง (ข้อความ/ตัวเลข/ตัวเลือก/ใช่-ไม่ใช่) แก้ค่าในช่องได้เลย บันทึกอัตโนมัติ ทุกการแก้มีประวัติว่าใครแก้อะไรจากเท่าไรเป็นเท่าไร · Tester ดูได้อย่างเดียว</li>
       <li>นำเข้าจาก Excel / Google Sheets: คัดลอกทั้งตารางแล้ววางในปุ่ม นำเข้า · ส่งออกเป็น CSV/JSON เพื่อใช้กับเอนจินเกมได้</li>
       <li>ในการ์ด ลิงก์แถวข้อมูลได้ (เช่น การ์ด "บอสสู้ยากไป" ลิงก์ไปแถว Golem) และ Claude อ่าน/แก้ตารางได้ผ่าน MCP (list_tables, get_table, update_row, add_row)</li></ul></details>
+    <details><summary>คอลัมน์ รอข้อมูล (Needs info)</summary><ul>
+      <li>ถ้าติดเพราะข้อมูลไม่พอ Dev กด ❓ ถามคำถาม (หรือลากการ์ดจาก กำลังทำ มา รอข้อมูล) พร้อมเขียนคำถามเจาะจง ส่วน Claude ใช้เครื่องมือ ask_question ได้เลย แทนการเดา</li>
+      <li>ผู้แจ้งการ์ด (และคนที่ถูก @ ในคำถาม) ได้รับแจ้งเตือนใน Discord และการ์ดขึ้นใน "รอฉัน" ตอบในคอมเมนต์ แล้วกด ✅ ตอบแล้ว — ทำต่อ การ์ดจะกลับไป กำลังทำ</li></ul></details>
     <details><summary>หลายโปรเจกต์</summary><ul>
       <li>ตัวสลับโปรเจกต์อยู่แถบบน (ถ้าคุณอยู่โปรเจกต์เดียวจะไม่แสดง) เลือก <b>ทุกโปรเจกต์</b> เพื่อดูรวม</li>
       <li>เลขการ์ดแยกต่อโปรเจกต์ เช่น <code>ALPHA-12</code> พิมพ์ <code>12</code> หรือ <code>alpha-12</code> ในช่องค้นหาได้</li>
@@ -246,6 +249,9 @@
       <li>Dev/Admin: create tables, define your own columns (text / number / choice / yes-no), edit cells directly (auto-saved). Every change is logged with who changed what, from → to. Testers can view only.</li>
       <li>Import from Excel / Google Sheets: copy the whole sheet and paste it in Import. Export CSV/JSON for your game engine.</li>
       <li>Link data rows on a card (e.g. a "boss too hard" ticket → the Golem row). Claude can read and edit tables through MCP (list_tables, get_table, update_row, add_row).</li></ul></details>
+    <details><summary>Needs info column</summary><ul>
+      <li>Stuck because something is unclear? The dev presses ❓ Ask a question (or drags the card from In Progress to Needs info) and writes one specific question. Claude uses the ask_question tool instead of guessing.</li>
+      <li>The card's reporter (and anyone @mentioned in the question) gets a Discord ping and the card shows in "Waiting on me". Answer in the comments, then press ✅ Answered — continue and the card goes back to In Progress.</li></ul></details>
     <details><summary>Multiple projects</summary><ul>
       <li>The project switcher is in the top bar (hidden if you only belong to one). Pick <b>All projects</b> for a combined view</li>
       <li>Card numbers are per project, e.g. <code>ALPHA-12</code>. Type <code>12</code> or <code>alpha-12</code> in search</li>
@@ -267,6 +273,14 @@
   <div class="meta" data-i18n="fail_hint"></div>
   <div class="err" id="failErr"></div>
   <div class="actions"><span class="sp"></span><button type="button" class="btn" id="failCancel" data-i18n="cancel"></button><button class="btn bad" data-i18n="fail_send"></button></div>
+</form></dialog>
+
+<dialog id="askDlg"><form class="dlg" id="askForm">
+  <h3 data-i18n="ask_title"></h3>
+  <label><span data-i18n="ask_label"></span><textarea name="text" required style="min-height:130px" data-i18n-ph="ask_ph"></textarea></label>
+  <div class="meta" data-i18n="ask_note"></div>
+  <div class="err" id="askErr"></div>
+  <div class="actions"><span class="sp"></span><button type="button" class="btn" id="askCancel" data-i18n="cancel"></button><button class="btn primary" data-i18n="ask_send"></button></div>
 </form></dialog>
 
 <dialog id="readyDlg"><form class="dlg" id="readyForm">

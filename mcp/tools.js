@@ -45,7 +45,7 @@ export function createServer({ base, token, project = '' }) {
   const server = new McpServer({ name: 'geckoboard', version: '1.0.0' }, {
     instructions:
       (project ? `This connection is pinned to project "${project}": you only see and change that project's cards. ` : 'The user may belong to several projects; each card shows its project and ref (e.g. ALPHA-12). Use a project-pinned connection (/mcp?project=...) when working inside one game repo. ') +
-      'IMPORTANT: if you are unsure which project, table or card something belongs to, or what the user wants changed, ASK the user before creating or changing anything. Never guess a project. ' +
+      'IMPORTANT: if you are unsure which project, table or card something belongs to, or what the user wants changed, ASK the user before creating or changing anything. Never guess a project. If a card you are working on is unclear or you need a decision from a human, call ask_question (moves it to "Needs info") instead of guessing; later use resume_card once it has been answered. ' +
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
       'for details (use get_attachment to look at screenshots on the card; if the card links game data rows or is about balance/stats, read them with list_tables/get_table), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
@@ -61,14 +61,14 @@ export function createServer({ base, token, project = '' }) {
 
   server.registerTool('list_my_cards', {
     description: 'List cards the current dev claimed (default: in_progress). Use this when the user says "do my tasks".',
-    inputSchema: { status: z.enum(['open', 'in_progress', 'ready_to_test', 'complete']).optional().describe('Default in_progress') },
+    inputSchema: { status: z.enum(['open', 'in_progress', 'needs_info', 'ready_to_test', 'complete']).optional().describe('Default in_progress; needs_info = cards you asked a question on') },
   }, wrap(async ({ status }) => Promise.all((await call('GET', `/cards?assignee=${encodeURIComponent((await call('GET', '/me')).email)}&status=${status || 'in_progress'}`)).map(withRef))));
 
   server.registerTool('list_cards', {
     description: 'List cards on the board with optional filters.',
     inputSchema: {
       type: z.enum(['ticket', 'task']).optional(),
-      status: z.string().optional().describe('Comma separated: open,in_progress,ready_to_test,complete'),
+      status: z.string().optional().describe('Comma separated: open,in_progress,needs_info,ready_to_test,complete'),
       unassigned: z.boolean().optional(),
     },
   }, wrap(async ({ type, status, unassigned }) => {
@@ -245,6 +245,16 @@ export function createServer({ base, token, project = '' }) {
     description: 'Recent changes of a table (who changed which row/column from → to, imports, deletions). Use to answer "who changed X" or to find a deleted row\'s old values.',
     inputSchema: { table: z.string(), limit: z.number().int().min(1).max(200).optional() },
   }, wrap(async ({ table, limit }) => [...(await call('GET', `/tables/${encodeURIComponent(table)}`)).history].reverse().slice(0, limit || 30)));
+
+  server.registerTool('ask_question', {
+    description: 'You are stuck or something is unclear/ambiguous (requirements, a design decision, missing steps, which option the user wants): do NOT guess. Park the card in "Needs info" with ONE specific question (what is unclear + the options you see). The reporter and anyone you @mention are notified on Discord. Only for cards you own (in_progress). Then stop working on that card and continue with others; when a human has answered, use resume_card.',
+    inputSchema: { id: z.number().int(), question: z.string().describe('Specific question in Thai, short; you may @mention a team member by name') },
+  }, wrap(async ({ id, question }) => withRef(await call('POST', `/cards/${id}/ask`, { text: question }))));
+
+  server.registerTool('resume_card', {
+    description: 'A card in "Needs info" has been answered (read the new comments with get_card first): move it back to in_progress so you can continue. Optionally add a short note.',
+    inputSchema: { id: z.number().int(), note: z.string().optional() },
+  }, wrap(async ({ id, note }) => withRef(await call('POST', `/cards/${id}/resume`, note ? { text: note } : {}))));
 
   server.registerPrompt('import_game_data', {
     description: 'Scan this game repo for balance data (monsters, items, zones, skills…) and put it into GeckoBoard tables',

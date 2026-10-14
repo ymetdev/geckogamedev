@@ -6,7 +6,7 @@
   --text:#e9ecf3;--text2:#aab2c4;--mute:#7e879b;
   --accent:#7c8cff;--accent2:#a78bfa;--ink:#0b0d18;
   --ticket:#ff9467;--task:#5ccbff;
-  --open:#8b93a5;--prog:#f5c451;--test:#b48cff;--done:#4ade80;--bad:#f87171;
+  --open:#8b93a5;--prog:#f5c451;--test:#b48cff;--done:#4ade80;--ask:#fb923c;--bad:#f87171;
   --r:12px;--shadow:0 18px 50px #000b,0 2px 6px #0008;
   --font:Inter,"Noto Sans Thai","Sarabun",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --appbar:60px;
@@ -93,7 +93,7 @@ label{display:flex;flex-direction:column;gap:6px;color:var(--text2);font-size:12
 .ftog{display:none}
 
 /* ---------- board ---------- */
-main{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(270px,1fr));gap:14px;padding:16px 20px 20px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity}
+main{flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:14px;padding:16px 20px 20px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity}
 .col{display:flex;flex-direction:column;min-height:0;background:linear-gradient(180deg,#11141b,#0e1117);border:1px solid var(--line);border-radius:16px;scroll-snap-align:start}
 .col.over{border-color:var(--accent);box-shadow:0 0 0 3px #7c8cff22}
 .col h2{flex:none;display:flex;align-items:center;gap:9px;padding:14px 14px 10px;font-size:13px;font-weight:650;color:var(--text2);letter-spacing:.2px}
@@ -235,7 +235,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
 @media(max-width:1100px){
   .search{max-width:none}.brand-name{display:none}
   .hx .lbl{display:none}.hx .btn.icon{padding:0 10px}
-  main{grid-template-columns:repeat(4,minmax(280px,44vw))}
+  main{grid-template-columns:repeat(5,minmax(280px,44vw))}
   #newBtn .lbl{display:none}#newBtn{padding:0 11px}
   .chip{padding:3px}.chip>span:not(.av){display:none}
   .search{min-width:140px}
@@ -267,7 +267,7 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
   .colbody{overflow:visible;padding:0;gap:10px}
   .card{padding:13px 14px 12px 17px}
   .chk input{width:22px;height:22px}.chk{padding:4px}
-  #tabs{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(12,14,19,.94);backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:6px 6px calc(6px + var(--safe-b));gap:4px}
+  #tabs{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(12,14,19,.94);backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:6px 6px calc(6px + var(--safe-b));gap:4px}
   #tabs button{display:flex;flex-direction:column;align-items:center;gap:1px;background:none;border:0;border-radius:11px;padding:6px 2px;color:var(--mute);font-size:11.5px;cursor:pointer;min-height:48px;position:relative}
   #tabs button .tc{font-size:15px;font-weight:700;color:var(--text2)}
   #tabs button.on{background:var(--surface3);color:var(--text)}#tabs button.on .tc{color:var(--accent)}
@@ -300,9 +300,9 @@ html[lang=th] [data-lang=en],html[lang=en] [data-lang=th]{display:none}
 /* ---------- tall portrait screens (e.g. 1080x1920 wall display / kiosk) ---------- */
 @media(orientation:portrait) and (min-width:900px) and (min-height:1400px){
   body{zoom:1.25;height:calc(100dvh / 1.25)}
-  .brand-name{display:inline}
+  .search{min-width:110px;flex:1 1 150px}.hx{gap:6px}
   .need .lbl{display:inline}
-  main{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));overflow:hidden;gap:14px;padding:14px 16px 16px;scroll-snap-type:none}
+  main{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));overflow:hidden;gap:14px;padding:14px 16px 16px;scroll-snap-type:none}
   .col h2{font-size:14.5px}
   .colbody{padding:2px 12px 14px}
   .onb{grid-column:1/-1;grid-row:1/-1}
@@ -359,3 +359,8 @@ table.gd{border-collapse:separate;border-spacing:0;width:max-content;min-width:1
 .failbox.retest{border-color:#3d3360;background:#17142a}.failbox.retest b{color:var(--test)}
 #failBtn.on{background:#3a1519;border-color:#7a2a31;color:#ffb4b4}
 #failBtn b{background:#3a1519;color:#ffb4b4;border-radius:10px;padding:0 8px;font-size:11px;line-height:18px;margin-left:6px}
+
+/* ---------- needs-info column ---------- */
+.askbox{border:1px solid #6b4220;border-left:4px solid var(--ask);background:#25180e;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.askbox b{color:#ffc79a}.askbox div{white-space:pre-wrap;word-break:break-word}.askbox small{color:var(--mute)}
+@media(orientation:portrait) and (min-width:900px) and (min-height:1400px){main>.col:nth-child(5){grid-column:1/-1}}

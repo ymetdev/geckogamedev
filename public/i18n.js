@@ -2,6 +2,7 @@
 const I18N = {
 en: {
   all: 'All', tickets: 'Tickets', tasks: 'Tasks', everyone: 'Everyone', mine: 'Mine', unassigned: 'Unassigned', help: '? Guide', new: '+ New',
+  s_needs_info: 'Needs info', empty_needs_info: 'No open questions', ask_btn: 'Ask a question', resume_btn: 'Answered — continue', ask_from: 'Question from {0} — waiting for an answer', ask_hint: 'Answer in the comments, then press “Answered — continue”', ask_title: 'Ask a question', ask_label: 'What do you need to know?', ask_ph: 'Be specific: what is unclear and what options you see…', ask_note: 'The card moves to “Needs info”. The reporter (and anyone you @mention) is notified.', ask_send: 'Ask', ask_need: 'Write your question', u_asked: '{0} is waiting for an answer', u_resumed: '{0} is back in progress', n_asked: 'A question is waiting for your answer on {0}', a_asked: 'asked', a_resumed: 'resumed',
   s_open: 'Open', s_in_progress: 'In Progress', s_ready_to_test: 'Ready to Test', s_complete: 'Complete',
   newcard: 'New card', edit_card: 'Edit card', type: 'Type', ticket_opt: 'Ticket (bug / request)', task_opt: 'Task', priority: 'Priority',
   pri_low: 'low', pri_medium: 'medium', pri_high: 'high', pri_critical: 'critical',
@@ -75,6 +76,7 @@ en: {
 },
 th: {
   all: 'ทั้งหมด', tickets: 'Tickets', tasks: 'Tasks', everyone: 'ทุกคน', mine: 'ของฉัน', unassigned: 'ยังไม่มีคนรับ', help: '? วิธีใช้', new: '+ สร้างการ์ด',
+  s_needs_info: 'รอข้อมูล', empty_needs_info: 'ไม่มีคำถามค้าง', ask_btn: 'ถามคำถาม', resume_btn: 'ตอบแล้ว — ทำต่อ', ask_from: 'คำถามจาก {0} — รอคำตอบ', ask_hint: 'ตอบในคอมเมนต์ แล้วกด “ตอบแล้ว — ทำต่อ”', ask_title: 'ถามคำถาม', ask_label: 'อยากรู้อะไร?', ask_ph: 'เจาะจงเข้าไว้: อะไรยังไม่ชัด และเห็นทางเลือกอะไรบ้าง…', ask_note: 'การ์ดจะย้ายไป “รอข้อมูล” ผู้แจ้ง (และคนที่คุณ @ ไว้) จะได้รับแจ้งเตือน', ask_send: 'ถาม', ask_need: 'พิมพ์คำถามก่อน', u_asked: '{0} รอคำตอบอยู่', u_resumed: '{0} กลับไปทำต่อแล้ว', n_asked: 'มีคำถามรอคำตอบจากคุณที่ {0}', a_asked: 'ถามคำถาม', a_resumed: 'ทำต่อ',
   s_open: 'เปิด', s_in_progress: 'กำลังทำ', s_ready_to_test: 'พร้อมเทส', s_complete: 'เสร็จสิ้น',
   newcard: 'สร้างการ์ดใหม่', edit_card: 'แก้ไขการ์ด', type: 'ประเภท', ticket_opt: 'Ticket (บั๊ก / คำขอ)', task_opt: 'Task (งานที่ต้องทำ)', priority: 'ความสำคัญ',
   pri_low: 'ต่ำ', pri_medium: 'ปานกลาง', pri_high: 'สูง', pri_critical: 'วิกฤต',

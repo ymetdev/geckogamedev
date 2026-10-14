@@ -1,5 +1,5 @@
 // GeckoBoard front-end. Depends on /i18n.js (I18N).
-const COLS = [['open', '--open'], ['in_progress', '--prog'], ['ready_to_test', '--test'], ['complete', '--done']];
+const COLS = [['open', '--open'], ['in_progress', '--prog'], ['needs_info', '--ask'], ['ready_to_test', '--test'], ['complete', '--done']];
 const COLOR = Object.fromEntries(COLS);
 const PRI_W = { critical: 0, high: 1, medium: 2, low: 3 };
 const OLD_DONE_MS = 7 * 864e5, STALE_MS = 3 * 864e5;
@@ -436,6 +436,8 @@ const anyFilter = () => Object.keys(F0).some((k) => F[k] !== F0[k]);
 function needsMe(c) {
   if (!user) return false;
   const mineIP = c.assignees.includes(user.email) && c.status === 'in_progress', r = roleOf(c.project);
+  const answer = c.status === 'needs_info' && (c.reporter === user.email || (c.comments || []).some((m) => m.text.startsWith('❓') && (m.mentions || []).includes(user.email)));
+  if (answer) return true; // somebody asked you a question
   if (r === 'tester') return c.status === 'ready_to_test';
   if (r === 'dev') return mineIP;
   return r === 'admin' && (c.status === 'ready_to_test' || mineIP);
@@ -598,12 +600,14 @@ async function reorder(c, col, target) {
 async function moveCard(c, to) {
   const from = c.status; if (from === to) return;
   const mine = c.assignees.includes(user.email);
-  if (['open-in_progress', 'in_progress-open', 'ready_to_test-complete', 'complete-open', 'complete-in_progress'].includes(`${from}-${to}`)) markBusy(c.id);
+  if (['open-in_progress', 'in_progress-open', 'needs_info-in_progress', 'needs_info-open', 'ready_to_test-complete', 'complete-open', 'complete-in_progress'].includes(`${from}-${to}`)) markBusy(c.id);
   try {
     if (from === 'open' && to === 'in_progress' && rl(c.project, 'dev', 'admin')) { await api('POST', `/cards/${c.id}/claim`, {}); await load(); return undoToast(c.id, 'u_claimed'); }
     else if (from === 'in_progress' && to === 'open' && (mine || rl(c.project, 'admin'))) { await api('POST', `/cards/${c.id}/unclaim`, mine ? {} : { email: c.assignees[0] }); await load(); return undoToast(c.id, 'u_released'); }
     else if (from === 'ready_to_test' && to === 'complete' && rl(c.project, 'tester', 'admin')) { await api('POST', `/cards/${c.id}/pass`, {}); await load(); return undoToast(c.id, 'u_passed'); }
     else if (from === 'ready_to_test' && to === 'in_progress' && rl(c.project, 'tester', 'admin')) return openFailDlg(c);
+    else if (from === 'in_progress' && to === 'needs_info' && rl(c.project, 'dev', 'admin')) { if (mine || rl(c.project, 'admin')) return openAskDlg(c); return toast(t('move_not_yours')); }
+    else if (from === 'needs_info' && to === 'in_progress' && (rl(c.project, 'dev', 'admin') || c.reporter === user.email)) { await api('POST', `/cards/${c.id}/resume`, {}); await load(); return undoToast(c.id, 'u_resumed'); }
     else if (from === 'complete' && (to === 'open' || to === 'in_progress') && rl(c.project, 'tester', 'admin')) await api('POST', `/cards/${c.id}/reopen`, {});
     else if (from === 'in_progress' && to === 'ready_to_test' && rl(c.project, 'dev', 'admin')) { if (mine || rl(c.project, 'admin')) return openReadyDlg(c); return toast(t('move_not_yours')); }
     else return toast(t('move_no'));
@@ -638,6 +642,8 @@ function showCard(id, keep) {
     else if (!owner) prim.push(`<button class="btn primary" data-a="claim">${t('claim')}</button>`);
     else if (rl(c.project, 'admin')) sec.push(`<button class="btn" data-a="unclaim_other" data-email="${esc(owner)}">${t('release_other', nameOf(owner))}</button>`);
   }
+  if (c.status === 'in_progress' && rl(c.project, 'dev', 'admin') && (mine || rl(c.project, 'admin'))) sec.unshift(`<button class="btn" data-a="ask">❓ ${t('ask_btn')}</button>`);
+  if (c.status === 'needs_info' && (rl(c.project, 'dev', 'admin') || c.reporter === user.email)) prim.push(`<button class="btn primary" data-a="resume">✅ ${t('resume_btn')}</button>`);
   if (c.status === 'ready_to_test' && rl(c.project, 'tester', 'admin')) prim.push(`<button class="btn ok" data-a="pass">${t('pass')}</button><button class="btn bad" data-a="fail">${t('fail')}</button>`);
   if (c.status === 'complete' && rl(c.project, 'tester', 'admin')) prim.push(`<button class="btn" data-a="reopen">${t('reopen')}</button>`);
   if (rl(c.project, 'dev', 'admin') && (mine || rl(c.project, 'admin')) && (c.status === 'in_progress' || c.status === 'ready_to_test')) {
@@ -665,6 +671,7 @@ function showCard(id, keep) {
     <div class="dgrid">
      <div class="dmain">
       ${(() => { const fi = failInfo(c); return fi.active && fi.last ? `<div class="failbox"><b>❌ ${t('failed_by', nameOf(fi.last.user))}${fi.count > 1 ? ' · ' + t('failed_times', fi.count) : ''}</b><div>${esc(fi.last.text)}</div><small>${new Date(fi.last.at).toLocaleString(locale())}</small></div>` : fi.count && c.status === 'ready_to_test' ? `<div class="failbox retest"><b>↻ ${t('retest_badge', fi.count)}</b></div>` : ''; })()}
+      ${c.status === 'needs_info' ? (() => { const q = [...c.comments].reverse().find((m) => m.text.startsWith('❓ Needs info')); return q ? `<div class="askbox"><b>❓ ${t('ask_from', nameOf(q.user))}</b><div>${esc(q.text.replace(/^❓ Needs info:\s*/, ''))}</div><small>${new Date(q.at).toLocaleString(locale())} · ${t('ask_hint')}</small></div>` : ''; })() : ''}
       <div class="s-title"><h3>${esc(c.title)}</h3>
         <div class="row">${canEdit ? `<button class="btn" data-a="edit">✎ ${t('edit')}</button>` : ''}<button class="btn" data-a="copytext">${t('copy_text')}</button></div></div>
       ${c.tags.length || c.due || c.milestone ? `<div class="chiprow s-chips" style="margin:0">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}${dueChip(c)}${c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : ''}</div>` : ''}
@@ -754,6 +761,16 @@ $('#failForm').addEventListener('submit', async (e) => {
   try { const id = failFor.id; await api('POST', `/cards/${id}/fail`, { text }); $('#failDlg').close(); $('#viewDlg').close(); await load(); undoToast(id, 'u_failed'); } catch (err) { $('#failErr').textContent = err.message; }
   }, e.target.querySelector('button.bad'));
 });
+let askFor = null;
+function openAskDlg(c) { askFor = c; const f = $('#askForm'); f.reset(); $('#askErr').textContent = ''; $('#askDlg').showModal(); f.text.focus(); }
+$('#askCancel').onclick = () => $('#askDlg').close();
+$('#askForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const text = e.target.text.value.trim();
+  if (!text) { $('#askErr').textContent = t('ask_need'); return; }
+  await withBusy(e.target, async () => {
+    try { const id = askFor.id; await api('POST', `/cards/${id}/ask`, { text }); $('#askDlg').close(); $('#viewDlg').close(); await load(); undoToast(id, 'u_asked'); } catch (err) { $('#askErr').textContent = err.message; }
+  }, e.target.querySelector('button.primary'));
+});
 let readyFor = null;
 function openReadyDlg(c) {
   readyFor = c; const f = $('#readyForm'); f.reset(); $('#readyErr').textContent = '';
@@ -771,12 +788,13 @@ $('#readyForm').addEventListener('submit', async (e) => {
   }, e.target.querySelector('button.primary'));
 });
 function act(c, a, btn) {
-  if (['close', 'edit', 'copytext', 'ready', 'fail'].includes(a)) return actInner(c, a, btn);
+  if (['close', 'edit', 'copytext', 'ready', 'fail', 'ask'].includes(a)) return actInner(c, a, btn);
   return withBusy(btn, () => actInner(c, a, btn)); // one request at a time per button
 }
 async function actInner(c, a, btn) {
   if (a === 'close') return $('#viewDlg').close();
   if (a === 'ready') return openReadyDlg(c);
+  if (a === 'ask') return openAskDlg(c);
   if (a === 'edit') return openCardDlg(c);
   if (a === 'copytext') return copyText(mdText(c), btn, 'copy_text');
   try {
@@ -798,6 +816,7 @@ async function actInner(c, a, btn) {
     catch (er) { await load(); if (er.data?.claimed_by) { toast(t('already', nameOf(er.data.claimed_by))); return; } throw er; }
     await load();
     if (a === 'pass') { $('#viewDlg').close(); undoToast(c.id, 'u_passed'); }
+    if (a === 'resume') undoToast(c.id, 'u_resumed');
     else if (a === 'claim') undoToast(c.id, 'u_claimed');
     else if (a === 'unclaim') undoToast(c.id, 'u_released');
   } catch (e) { toast(e.message); }
@@ -935,7 +954,8 @@ function renderBell() {
   const unread = list.filter((n) => n.at > seen).length;
   const mineLate = user ? cards.filter((c) => c.status !== 'complete' && c.assignees.includes(user.email) && c.due && c.due < today()).length : 0;
   const ready = cards.filter((c) => c.status === 'ready_to_test' && rl(c.project, 'tester', 'admin')).length;
-  const extra = [ready ? { id: null, text: t('n_ready', ready), sub: '', go: 'ready_to_test' } : null, mineLate ? { id: null, text: t('n_overdue', mineLate), sub: '' } : null].filter(Boolean);
+  const asked = user ? cards.filter((c) => c.status === 'needs_info' && c.reporter === user.email && !c.assignees.includes(user.email)) : [];
+  const extra = [...asked.map((c) => ({ id: c.id, text: t('n_asked', refOf(c)), sub: '' })), ready ? { id: null, text: t('n_ready', ready), sub: '', go: 'ready_to_test' } : null, mineLate ? { id: null, text: t('n_overdue', mineLate), sub: '' } : null].filter(Boolean);
   const total = unread + extra.length;
   const badge = $('#bellBadge'); badge.hidden = !total; badge.textContent = total;
   $('#bellMenu').innerHTML = [...extra, ...list].map((n) => `<div class="nitem" ${n.id ? `data-open="${n.id}"` : n.go ? `data-go="${n.go}"` : ''}>${esc(n.text)}${n.sub ? `<small>${esc(n.sub)}</small>` : ''}</div>`).join('') || `<div class="nitem" style="cursor:default">${t('no_notif')}</div>`;
