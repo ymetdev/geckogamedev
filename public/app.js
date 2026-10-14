@@ -427,7 +427,7 @@ function matches(c) {
   if (F.own === '__none' ? c.assignees.length : F.own && !c.assignees.includes(F.own)) return false;
   if (F.q) {
     const q = F.q.toLowerCase().trim();
-    const hit = q.startsWith('#') ? String(c.num) === q.slice(1) : `${c.title} ${c.description} ${c.tags.join(' ')} ${c.milestone}`.toLowerCase().includes(q) || String(c.num) === q || refOf(c).toLowerCase() === q;
+    const hit = q.startsWith('#') ? String(c.num) === q.slice(1) : `${c.title} ${c.description} ${c.repro || ''} ${c.acceptance || ''} ${c.tags.join(' ')} ${c.milestone}`.toLowerCase().includes(q) || String(c.num) === q || refOf(c).toLowerCase() === q;
     if (!hit) return false;
   }
   return true;
@@ -625,6 +625,8 @@ function mdText(c) {
   if (c.assignees.length) L.push(`${t('working')}: ${c.assignees.map(nameOf).join(', ')}`);
   if (c.due) L.push(t('due_on', c.due)); if (c.milestone) L.push(t('ms_chip', c.milestone));
   if (c.description) L.push('', c.description);
+  if (c.repro) L.push('', t('repro_h') + ':', c.repro);
+  if (c.acceptance) L.push('', t('acc_h') + ':', c.acceptance);
   if (c.test_steps.length) L.push('', t('howtest'), ...c.test_steps.map((s, i) => `${i + 1}. ${s}`));
   if (location.origin) L.push('', `${location.origin}/#card-${c.id}`);
   return L.join('\n');
@@ -676,6 +678,8 @@ function showCard(id, keep) {
         <div class="row">${canEdit ? `<button class="btn" data-a="edit">✎ ${t('edit')}</button>` : ''}<button class="btn" data-a="copytext">${t('copy_text')}</button></div></div>
       ${c.tags.length || c.due || c.milestone ? `<div class="chiprow s-chips" style="margin:0">${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}${dueChip(c)}${c.milestone ? `<span class="pill ms">${esc(t('ms_chip', c.milestone))}</span>` : ''}</div>` : ''}
       ${c.description ? `<div class="box s-desc">${esc(c.description)}</div>` : ''}
+      ${c.repro ? `<div class="sec s-repro"><h4>🐞 ${t('repro_h')}</h4><div class="box" style="white-space:pre-wrap">${esc(c.repro)}</div></div>` : ''}
+      ${c.acceptance ? `<div class="sec s-acc"><h4>🎯 ${t('acc_h')}</h4><div class="box accbox" style="white-space:pre-wrap">${esc(c.acceptance)}</div></div>` : ''}
       <div class="sec s-att"><h4>${t('attachments')} ${c.files.length ? `(${c.files.length})` : ''}</h4>
         ${files ? `<div class="gal">${files}</div>` : ''}
         <div class="drop" id="drop">${t('drop_hint')} · <a href="#" id="pickFile">${t('add_file')}</a>
@@ -860,7 +864,7 @@ $('#newDrop').ondrop = (e) => { e.preventDefault(); $('#newDrop').classList.remo
 const DRAFT_KEY = 'geckoboard.draft';
 const formState = () => JSON.stringify(Object.fromEntries(new FormData($('#cardForm'))));
 let cardInitial = '';
-const draftHasText = () => { const f = $('#cardForm'); return !!(f.title.value.trim() || f.description.value.trim() || f.tags.value.trim()); };
+const draftHasText = () => { const f = $('#cardForm'); return !!(f.title.value.trim() || f.description.value.trim() || f.repro.value.trim() || f.acceptance.value.trim() || f.tags.value.trim()); };
 let draftT; function saveDraft() { if (editId) return; clearTimeout(draftT); draftT = setTimeout(() => { try { if (draftHasText()) localStorage.setItem(DRAFT_KEY, formState()); else localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } }, 300); }
 const clearDraft = () => { clearTimeout(draftT); try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } };
 function openCardDlg(c) {
@@ -871,15 +875,18 @@ function openCardDlg(c) {
   const ps = f.project, mine = activeProjects();
   ps.innerHTML = mine.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.key)})</option>`).join(''); ps.value = c ? c.project : (mine.some((p) => p.id === curPid()) ? curPid() : mine[0]?.id || '');
   $('#projRow').hidden = !!c || mine.length <= 1;
-  if (c) { f.type.value = c.type; f.priority.value = c.priority; f.title.value = c.title; f.description.value = c.description; f.tags.value = c.tags.join(', '); f.due.value = c.due; f.milestone.value = c.milestone; f.parent.value = c.parent ? cards.find((x) => x.id === c.parent)?.num || '' : ''; }
+  if (c) { f.type.value = c.type; f.priority.value = c.priority; f.title.value = c.title; f.description.value = c.description; f.repro.value = c.repro || ''; f.acceptance.value = c.acceptance || ''; f.tags.value = c.tags.join(', '); f.due.value = c.due; f.milestone.value = c.milestone; f.parent.value = c.parent ? cards.find((x) => x.id === c.parent)?.num || '' : ''; }
   else { // restore an unfinished draft
     try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) { for (const k of Object.keys(d)) if (f[k]) f[k].value = d[k]; $('#draftBar').hidden = false; } } catch { /* ignore */ }
   }
+  syncReproRow();
   cardInitial = formState();
   $('#cardDlg').showModal();
 }
+const syncReproRow = () => { $('#reproRow').hidden = $('#cardForm').type.value !== 'ticket'; }; // repro steps only make sense for tickets (bug reports)
+$('#cardForm').type.addEventListener('change', syncReproRow);
 $('#cardForm').addEventListener('input', saveDraft);
-$('#draftFresh').onclick = () => { clearDraft(); $('#cardForm').reset(); $('#draftBar').hidden = true; cardInitial = formState(); };
+$('#draftFresh').onclick = () => { clearDraft(); $('#cardForm').reset(); syncReproRow(); $('#draftBar').hidden = true; cardInitial = formState(); };
 function okToCloseCardDlg() { // Esc / Cancel: never lose work silently
   if (editId) return formState() === cardInitial || confirm(t('discard_changes'));
   if (pending.length && !confirm(t('discard_images', pending.length))) return false;

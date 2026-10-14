@@ -75,7 +75,7 @@ async function putBlobEarly(hash, mime, buf) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true }); fs.writeFileSync(path.join(UPLOAD_DIR, hash), buf);
 }
 for (const c of db.cards) { // upgrade older cards with the newer fields
-  c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= [];
+  c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; c.repro ??= ''; c.acceptance ??= '';
 }
 // Seed team from data/users.seed.json (adds missing emails only; later role changes in the UI are kept)
 try {
@@ -316,7 +316,7 @@ async function restoreBackup(id) { // brings back cards + trash (users and sessi
   if (Array.isArray(data.projects) && data.projects.length) db.projects = data.projects;
   if (Array.isArray(data.tables)) { db.tables = data.tables; db.tseq = Math.max(db.tseq || 0, data.tseq || 0); }
   for (const c of [...db.cards, ...db.trash]) { c.project ??= db.projects[0].id; c.num ??= c.id; }
-  for (const c of db.cards) { c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; }
+  for (const c of db.cards) { c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; c.repro ??= ''; c.acceptance ??= ''; }
   await save();
   return { cards: db.cards.length };
 }
@@ -811,7 +811,7 @@ async function api(req, res, url) {
     need(parentId === null || db.cards.some((c) => c.id === parentId && c.project === pid), 400, `Parent card #${parentId} not found in this project`);
     const proj = projOf(pid);
     const card = {
-      id: ++db.seq, project: pid, num: ++proj.seq, type, title, description: clean(body.description), priority, tags,
+      id: ++db.seq, project: pid, num: ++proj.seq, type, title, description: clean(body.description), repro: clean(body.repro), acceptance: clean(body.acceptance), priority, tags,
       due, milestone: clean(body.milestone, 40), parent: parentId, related: [], files: [],
       reporter: user, status: 'open', assignees: [],
       dev_summary: '', test_steps: [], comments: [], history: [],
@@ -842,6 +842,8 @@ async function api(req, res, url) {
     need(can(me, 'admin') || card.reporter === user || card.assignees.includes(user), 403, 'Only the reporter, the owner or an admin can edit');
     if (body.title !== undefined) { const t = clean(body.title, 200); need(t, 400, 'title required'); card.title = t; }
     if (body.description !== undefined) card.description = clean(body.description);
+    if (body.repro !== undefined) card.repro = clean(body.repro);
+    if (body.acceptance !== undefined) card.acceptance = clean(body.acceptance);
     if (PRIORITIES.includes(body.priority)) card.priority = body.priority;
     if (TYPES.includes(body.type)) card.type = body.type;
     if (body.tags !== undefined) card.tags = cleanTags(body.tags);

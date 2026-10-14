@@ -364,3 +364,5 @@ table.gd{border-collapse:separate;border-spacing:0;width:max-content;min-width:1
 .askbox{border:1px solid #6b4220;border-left:4px solid var(--ask);background:#25180e;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:4px}
 .askbox b{color:#ffc79a}.askbox div{white-space:pre-wrap;word-break:break-word}.askbox small{color:var(--mute)}
 @media(orientation:portrait) and (min-width:900px) and (min-height:1400px){main>.col:nth-child(5){grid-column:1/-1}}
+
+.accbox{border-left:3px solid var(--done);background:#0f1d17}

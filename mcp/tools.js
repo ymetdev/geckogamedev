@@ -50,6 +50,7 @@ export function createServer({ base, token, project = '' }) {
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
       'for details (use get_attachment to look at screenshots on the card; if the card links game data rows or is about balance/stats, read them with list_tables/get_table), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
       'summary and test steps for the tester. Never mark ready if the fix is unfinished. ' +
+      'Each card may have `repro` (steps to reproduce / expected vs actual) and `acceptance` ("done when" criteria): read them first. Your fix must satisfy EVERY acceptance criterion and your test_steps must verify each one. If repro/acceptance is missing or too vague to know when the card is done, call ask_question instead of guessing. ' +
       'WRITING STYLE for the summary and test_steps: write in THAI, in very simple everyday words, as short as possible, for a tester who is NOT a programmer. ' +
       'No code, file, class or function names: describe what the tester does and sees in the game. One action per step, 3-6 steps, each step like "ทำ... → ควรเห็น: ...". The summary is 1-2 short Thai sentences saying what changed in plain words.',
   });
@@ -98,7 +99,7 @@ export function createServer({ base, token, project = '' }) {
 
   server.registerTool('mark_ready_for_test', {
     description:
-      'After the fix is DONE and verified, set the card to Ready to Test. Write summary and test_steps in THAI, simple everyday words, very short, ' +
+      'After the fix is DONE and verified (every acceptance criterion of the card met), set the card to Ready to Test. Write summary and test_steps in THAI, simple everyday words, very short, ' +
       'for a non-programmer tester (no code or file names; say what they do and what they should see). Example step: "กดปุ่มโจมตี → ควรเห็นแถบพลังลดลงทันที".',
     inputSchema: {
       id: z.number().int(),
@@ -136,6 +137,8 @@ export function createServer({ base, token, project = '' }) {
       type: z.enum(['ticket', 'task']),
       title: z.string(),
       description: z.string().optional(),
+      repro: z.string().optional().describe('Bugs: steps to reproduce + expected vs actual'),
+      acceptance: z.string().optional().describe('"Done when" criteria, one per line'),
       priority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
       tags: z.array(z.string()).optional(),
       due: z.string().optional().describe('YYYY-MM-DD'),
@@ -268,9 +271,9 @@ export function createServer({ base, token, project = '' }) {
 
   // ---- card edit / delete / restore / release / link ----
   server.registerTool('update_card', {
-    description: 'Edit a card\'s fields (reporter, owner or admin only): title, description, type, priority, tags (replaces all tags), due (YYYY-MM-DD, "" clears), milestone ("" clears), parent (card id; null makes it top-level). Only the fields you pass change. Use mark_ready_for_test / claim_cards for status changes. If the user did not say exactly what to change, ASK first.',
+    description: 'Edit a card\'s fields (reporter, owner or admin only): title, description, repro (steps to reproduce), acceptance ("done when" criteria), type, priority, tags (replaces all tags), due (YYYY-MM-DD, "" clears), milestone ("" clears), parent (card id; null makes it top-level). Only the fields you pass change. Use mark_ready_for_test / claim_cards for status changes. If the user did not say exactly what to change, ASK first.',
     inputSchema: {
-      id: z.number().int(), title: z.string().optional(), description: z.string().optional(), type: z.enum(['ticket', 'task']).optional(),
+      id: z.number().int(), title: z.string().optional(), description: z.string().optional(), repro: z.string().optional(), acceptance: z.string().optional(), type: z.enum(['ticket', 'task']).optional(),
       priority: z.enum(['low', 'medium', 'high', 'critical']).optional(), tags: z.array(z.string()).optional(),
       due: z.string().optional(), milestone: z.string().optional(), parent: z.number().int().nullable().optional(),
     },

@@ -63,6 +63,8 @@
   </div>
   <label><span data-i18n="title"></span><input name="title" required maxlength="200"></label>
   <label><span data-i18n="desc"></span><textarea name="description"></textarea></label>
+  <label id="reproRow"><span data-i18n="repro_label"></span><textarea name="repro" style="min-height:70px" data-i18n-ph="repro_ph"></textarea></label>
+  <label><span data-i18n="acc_label"></span><textarea name="acceptance" style="min-height:70px" data-i18n-ph="acc_ph"></textarea></label>
   <label><span data-i18n="tags"></span><input name="tags"></label>
   <div class="row">
     <label style="flex:1"><span data-i18n="due"></span><input name="due" type="date"></label>
@@ -198,7 +200,7 @@
   <div class="help" data-lang="en">
     <details data-h="all"><summary>Everyone: create a card</summary><ol>
       <li>Click <b>+ New</b> and pick <b>Ticket</b> (bug / request) or <b>Task</b> (work to do)</li>
-      <li>Add a title, description (steps to reproduce, expected result), priority and tags. The more detail, the better Claude's fix</li>
+      <li>Add a title, description, priority and tags. For bugs fill “Steps to reproduce · expected vs actual”, and always fill “Done when…” (what must be true for the card to count as done). The clearer these are, the better Claude's fix and the less it has to ask</li>
       <li>Use the <b>Mine / Unassigned</b> filters to find your own cards or cards nobody has picked up</li></ol></details>
     <details data-h="dev"><summary>Dev: pick up work and ask Claude</summary>
       <b>First-time setup</b><ol>
