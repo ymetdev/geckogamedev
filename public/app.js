@@ -150,12 +150,14 @@ async function doLoad(force) {
   const st = await api('GET', `/state?since=${force ? 0 : rev}`, undefined, true);
   if (st.unchanged) return;
   const sig = () => (openId ? JSON.stringify(cards.find((c) => c.id === openId)) : '');
-  const before = sig(), old = new Map(cards.map((c) => [c.id, c]));
+  const before = sig(), old = new Map(cards.map((c) => [c.id, c])), wasLoaded = loadedOnce;
+  const fxSnap = wasLoaded && typeof fxBefore === 'function' ? fxBefore() : null; // card positions before the redraw (for the fly-over effects)
   rev = st.rev; cards = st.cards; users = st.users; projects = st.projects || projects;
   renderProjectSwitch();
   announce(old);
   loadedOnce = true;
   renderAll(); bootHide();
+  if (fxSnap) fxAfter(fxSnap, old);
   if (openId && $('#viewDlg').open) {
     if (!cards.some((c) => c.id === openId)) { $('#viewDlg').close(); toast(t('card_gone')); }
     else if (sig() !== before && !typingInDetail()) showCard(openId, true); // keeps videos playing and inputs focused
@@ -216,6 +218,7 @@ function renderUserBox() {
      <button data-m="rename">✎ ${t('menu_rename')}</button>
      <button data-m="token">${t('menu_token')}</button>
      ${u.role === 'admin' ? `<button data-m="projects">${t('menu_projects')}</button><button data-m="team">${t('menu_team')}</button><button data-m="storage">${t('menu_storage')}</button><button data-m="backup">${t('menu_backup')}</button>` : ''}
+     ${typeof fxLabel === 'function' ? `<button data-m="fx">${fxLabel()}</button>` : ''}
      ${installEvt ? `<button data-m="install">📲 ${t('menu_install')}</button>` : ''}
      <button data-m="out">${t('menu_out')}</button></div>`;
   $('#chip').onclick = (e) => { e.stopPropagation(); $('#menu').classList.toggle('show'); };
@@ -253,6 +256,7 @@ $('#copyBtn').onclick = () => copyText($('#tokenCmd').textContent, $('#copyBtn')
 $('#copyJsonBtn').onclick = () => copyText($('#tokenJson').textContent, $('#copyJsonBtn'));
 $('#rotateBtn').onclick = () => { if (!confirm(t('confirm_rotate'))) return; withBusy($('#rotateBtn'), async () => { try { showToken((await api('POST', '/me/rotate-token', {})).token); } catch (e) { alert(e.message); } }); };
 async function menuAct(m) {
+  if (m === 'fx') return fxToggle();
   if (m === 'out') { await api('POST', '/logout', {}); showLogin(); }
   if (m === 'token') { const me = await api('GET', '/me'); showToken(me.token, true); $('#tokenDlg').showModal(); }
   if (m === 'rename') { const f = $('#nameForm'); f.reset(); f.name.value = user.name; $('#nameErr').textContent = ''; $('#nameDlg').showModal(); f.name.select(); }
@@ -513,7 +517,7 @@ function cardHtml(c) {
   const fi = failInfo(c);
   const failBadge = fi.active ? `<span class="pill fail" title="${esc(fi.last?.text || '')}">❌ ${t('failed_badge')}${fi.count > 1 ? ' ×' + fi.count : ''}</span>` : fi.count && c.status === 'ready_to_test' ? `<span class="pill retest">↻ ${t('retest_badge', fi.count)}</span>` : '';
   const failNote = fi.active && fi.last ? `<div class="failnote" title="${esc(fi.last.text)}">${esc(fi.last.text)}</div>` : '';
-  return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}${flash.has(c.id) ? ' flash' : ''}" data-id="${c.id}" data-pri="${c.priority}" draggable="true">
+  return `<div class="card${mine ? ' mine' : ''}${lockedByOther ? ' locked' : ''}${flash.has(c.id) ? ' flash' : ''}" data-id="${c.id}" data-pri="${c.priority}" data-st="${c.status}" draggable="true">
     <div class="row">${ctl}<span class="cid">${refOf(c)}</span><span class="tag ${c.type}">${c.type}</span>
     <span class="prib pri-${c.priority}">${t('pri_' + c.priority)}</span></div>
     <div class="title">${esc(c.title)}</div>

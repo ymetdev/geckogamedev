@@ -366,3 +366,28 @@ table.gd{border-collapse:separate;border-spacing:0;width:max-content;min-width:1
 @media(orientation:portrait) and (min-width:900px) and (min-height:1400px){main>.col:nth-child(5){grid-column:1/-1}}
 
 .accbox{border-left:3px solid var(--done);background:#0f1d17}
+
+/* ---------- effects (eye candy) ---------- */
+#fxBg{display:none}
+.fx #fxBg{display:block;position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+#fxBg i{position:absolute;width:75vmax;height:75vmax;border-radius:50%;will-change:transform}
+#fxBg i:nth-child(1){left:-25vmax;top:-30vmax;background:radial-gradient(circle,#7c8cff30,transparent 62%);animation:fxd1 52s ease-in-out infinite alternate}
+#fxBg i:nth-child(2){right:-30vmax;bottom:-35vmax;background:radial-gradient(circle,#34d39924,transparent 62%);animation:fxd2 61s ease-in-out infinite alternate}
+#fxBg i:nth-child(3){left:20vmax;top:25vmax;background:radial-gradient(circle,#a78bfa22,transparent 62%);animation:fxd3 73s ease-in-out infinite alternate}
+@keyframes fxd1{to{transform:translate(40vmax,32vmax) scale(1.25)}}
+@keyframes fxd2{to{transform:translate(-38vmax,-30vmax) scale(1.2)}}
+@keyframes fxd3{to{transform:translate(-25vmax,20vmax) scale(.8)}}
+.fx .col{background:linear-gradient(180deg,#11141bdb,#0e1117db)}
+.fx-paused *,.fx-paused *::before,.fx-paused *::after{animation-play-state:paused!important}
+#fxLayer{position:fixed;inset:0;z-index:100;pointer-events:none;overflow:hidden}
+.fx-spark{position:absolute;width:7px;height:7px;border-radius:50%}
+.card.fx-ghost{position:fixed;z-index:60;margin:0;pointer-events:none;box-shadow:0 18px 40px #000a,0 0 24px #7c8cff66;transition:none}
+.fx .card[data-st=ready_to_test]:not(.flash):not(.busy){animation:fxBreathP 3.4s ease-in-out infinite}
+.fx .card[data-st=needs_info]:not(.flash):not(.busy){animation:fxBreathO 2.6s ease-in-out infinite}
+@keyframes fxBreathP{50%{box-shadow:0 0 0 1px #b48cff66,0 0 22px #b48cff40}}
+@keyframes fxBreathO{50%{box-shadow:0 0 0 1px #fb923c66,0 0 20px #fb923c3d}}
+.card.fx-ping-red{animation:fxPingR 1.4s ease-out!important}.card.fx-ping-purple{animation:fxPingP 1.4s ease-out!important}.card.fx-ping-orange{animation:fxPingO 1.4s ease-out!important}.card.fx-ping-blue{animation:fxPingB 1.4s ease-out!important}
+@keyframes fxPingR{0%{box-shadow:0 0 0 0 #f8717199}100%{box-shadow:0 0 0 22px #f8717100}}
+@keyframes fxPingP{0%{box-shadow:0 0 0 0 #b48cff99}100%{box-shadow:0 0 0 22px #b48cff00}}
+@keyframes fxPingO{0%{box-shadow:0 0 0 0 #fb923c99}100%{box-shadow:0 0 0 22px #fb923c00}}
+@keyframes fxPingB{0%{box-shadow:0 0 0 0 #7c8cff99}100%{box-shadow:0 0 0 22px #7c8cff00}}
