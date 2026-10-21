@@ -66,6 +66,7 @@
   <label id="reproRow"><span data-i18n="repro_label"></span><textarea name="repro" style="min-height:70px" data-i18n-ph="repro_ph"></textarea></label>
   <label><span data-i18n="acc_label"></span><textarea name="acceptance" style="min-height:70px" data-i18n-ph="acc_ph"></textarea></label>
   <label><span data-i18n="tags"></span><input name="tags"></label>
+  <label id="asgRow" hidden><span data-i18n="assign_opt"></span><select name="assignee"></select></label>
   <div class="row">
     <label style="flex:1"><span data-i18n="due"></span><input name="due" type="date"></label>
     <label style="flex:1"><span data-i18n="milestone"></span><input name="milestone" list="msList" maxlength="40"></label>
@@ -183,6 +184,9 @@
     <details><summary>คอลัมน์ รอข้อมูล (Needs info)</summary><ul>
       <li>ถ้าติดเพราะข้อมูลไม่พอ Dev กด ❓ ถามคำถาม (หรือลากการ์ดจาก กำลังทำ มา รอข้อมูล) พร้อมเขียนคำถามเจาะจง ส่วน Claude ใช้เครื่องมือ ask_question ได้เลย แทนการเดา</li>
       <li>ผู้แจ้งการ์ด (และคนที่ถูก @ ในคำถาม) ได้รับแจ้งเตือนใน Discord และการ์ดขึ้นใน "รอฉัน" ตอบในคอมเมนต์ แล้วกด ✅ ตอบแล้ว — ทำต่อ การ์ดจะกลับไป กำลังทำ</li></ul></details>
+    <details><summary>มอบหมายงานให้กัน (Dev)</summary><ul>
+      <li>ในรายละเอียดการ์ดมีช่อง "มอบหมายให้" (การ์ดที่ยังไม่มีเจ้าของ Dev คนไหนก็มอบหมายให้เพื่อนได้) หรือ "ส่งต่อให้" (เจ้าของการ์ดส่งต่อให้ Dev คนอื่น) Admin มอบหมายใหม่ได้ทุกใบ · ตอนสร้างการ์ดก็เลือกคนได้เลย</li>
+      <li>มอบหมายได้เฉพาะ Dev/Admin ของโปรเจกต์ การ์ดที่เป็นของคนอื่นแล้วต้องให้เจ้าของหรือ Admin ส่งต่อ · คนที่ได้รับงานจะเห็นในกระดิ่ง และได้แท็กใน Discord (ถ้าตั้ง Discord ID) · Undo ได้ 5 นาที · สั่ง Claude ได้ เช่น "มอบหมาย MAIN-5 ให้ Dev Two" (assign_card, list_team)</li></ul></details>
     <details><summary>หลายโปรเจกต์</summary><ul>
       <li>ตัวสลับโปรเจกต์อยู่แถบบน (ถ้าคุณอยู่โปรเจกต์เดียวจะไม่แสดง) เลือก <b>ทุกโปรเจกต์</b> เพื่อดูรวม</li>
       <li>เลขการ์ดแยกต่อโปรเจกต์ เช่น <code>ALPHA-12</code> พิมพ์ <code>12</code> หรือ <code>alpha-12</code> ในช่องค้นหาได้</li>
@@ -254,6 +258,9 @@
     <details><summary>Needs info column</summary><ul>
       <li>Stuck because something is unclear? The dev presses ❓ Ask a question (or drags the card from In Progress to Needs info) and writes one specific question. Claude uses the ask_question tool instead of guessing.</li>
       <li>The card's reporter (and anyone @mentioned in the question) gets a Discord ping and the card shows in "Waiting on me". Answer in the comments, then press ✅ Answered — continue and the card goes back to In Progress.</li></ul></details>
+    <details><summary>Assigning cards to each other (devs)</summary><ul>
+      <li>In a card's details use "Assign to" (an unowned card: any dev can assign it to a teammate) or "Hand over to" (the owner passes it on). Admins can reassign any card. You can also pick someone when creating a card.</li>
+      <li>Only devs/admins of the project can be assigned; a card someone already owns must be handed over by its owner or an admin. The new owner sees it in the bell and gets a Discord ping (if their Discord ID is set). Undo works for 5 minutes. Ask Claude too, e.g. "assign MAIN-5 to Dev Two" (assign_card, list_team).</li></ul></details>
     <details><summary>Multiple projects</summary><ul>
       <li>The project switcher is in the top bar (hidden if you only belong to one). Pick <b>All projects</b> for a combined view</li>
       <li>Card numbers are per project, e.g. <code>ALPHA-12</code>. Type <code>12</code> or <code>alpha-12</code> in search</li>

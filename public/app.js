@@ -21,6 +21,7 @@ const nameOf = (e) => users.find((u) => u.email === e)?.name || e;
 let projects = [], viewProject = '';
 try { viewProject = localStorage.getItem('geckoboard.project') || ''; } catch { /* storage blocked */ }
 const PROJ = (id) => projects.find((p) => p.id === id);
+const assignable = (pid) => users.filter((u) => u.role === 'admin' || PROJ(pid)?.members?.[u.email] === 'dev'); // people who can own cards in a project
 const roleOf = (pid) => (user?.role === 'admin' ? 'admin' : PROJ(pid)?.role || null); // my role inside one project
 const rl = (pid, ...r) => r.includes(roleOf(pid));
 const activeProjects = () => projects.filter((p) => !p.archived);
@@ -45,7 +46,7 @@ function toast(m, action, ms) { // optional action = { label, fn }: shows a butt
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms || (action ? 8000 : 3800));
 }
 function hideToast() { $('#toast').style.display = 'none'; }
-const ERRS = [[/^Project is not empty/, 'e_pnotempty'], [/^Project required/, 'e_pneed'], [/^Not logged in/, 'e_login'], [/^Role "(.+)" is not allowed/, 'e_role'], [/^Card #(\d+) not found/, 'e_nocard'], [/^Already claimed by (.+?)\.?$/, 'e_claimed'], [/^Card already complete/, 'e_complete'],
+const ERRS = [[/^Only the current owner \((.+?)\) or an admin/, 'e_asg_owner'], [/^Can only assign to a dev or admin/, 'e_asg_target'], [/^Already assigned to (.+)/, 'e_asg_same'], [/^Project is not empty/, 'e_pnotempty'], [/^Project required/, 'e_pneed'], [/^Not logged in/, 'e_login'], [/^Role "(.+)" is not allowed/, 'e_role'], [/^Card #(\d+) not found/, 'e_nocard'], [/^Already claimed by (.+?)\.?$/, 'e_claimed'], [/^Card already complete/, 'e_complete'],
   [/^Not your card/, 'e_notyours'], [/^Only an assignee/, 'e_assignee'], [/^Card must be in progress/, 'e_inprog'], [/^test_steps required/, 'e_steps'], [/^Card is not ready to test/, 'e_notready'], [/^reason required/, 'e_reason'],
   [/^text required/, 'e_text'], [/^title required/, 'e_title'], [/^Only the reporter, the owner/, 'e_edit'], [/^File too large \(max (\d+) MB\)/, 'e_toolarge'], [/^Only PNG\/JPEG/, 'e_filetype'], [/^Max (\d+) files per card/, 'e_maxfiles'],
   [/^Empty file/, 'e_empty'], [/^File not found/, 'e_nofile'], [/recycled/i, 'e_recycled'], [/^A card cannot be its own parent/, 'e_selfparent'], [/^Invalid date/, 'e_date'], [/^Parent card #(\d+) not found/, 'e_noparent'],
@@ -182,7 +183,7 @@ function announce(old) { // glow the cards other people changed, and say what ha
     const prev = old.get(c.id); if (prev && prev.updated_at === c.updated_at && prev.status === c.status) continue;
     const last = c.history.at(-1); if (!last || last.user === user.email) continue; // my own actions need no highlight
     flash.add(c.id); setTimeout(() => { flash.delete(c.id); $(`.card[data-id="${c.id}"]`)?.classList.remove('flash'); }, 2600); // each card's glow ends on its own clock
-    if (msgs.length < 2) msgs.push(`${nameOf(last.user)} · ${refOf(c)} ${t('a_' + last.action)}`);
+    if (msgs.length < 2) msgs.push(`${nameOf(last.user)} · ${refOf(c)} ${t('a_' + last.action)}${last.action === 'assigned' ? ' ' + nameOf(last.text) : ''}`);
   }
   if (msgs.length) toast(msgs.join('  |  '));
 }
@@ -699,6 +700,11 @@ function showCard(id, keep) {
       <div class="banner s-banner${mine ? ' me' : ''}">${owner ? avatar(owner, 'lg') : '<span class="av lg" style="background:var(--surface3);color:var(--mute)">?</span>'}
         <div class="who">${owner ? `<b>${mine ? t('you') : esc(nameOf(owner))}</b><small>${t(c.status === 'complete' ? 'did_it' : 'working')}</small>` : `<span class="meta">${t('noassignee')}</span>`}</div></div>
       <div class="actions sideacts">${prim.join('')}</div>
+      ${(() => { // hand the card to a teammate: anyone for an unassigned card, the owner (or an admin) for an owned one
+        if (!(rl(c.project, 'dev', 'admin') && c.status !== 'complete' && (!owner || mine || rl(c.project, 'admin')))) return '';
+        const opts = assignable(c.project).filter((u) => u.email !== owner).sort((x, y) => (x.email === user.email ? -1 : y.email === user.email ? 1 : x.name.localeCompare(y.name)));
+        return opts.length ? `<div class="sec s-assign"><h4>${t(owner ? 'handover' : 'assign_to')}</h4><div class="row" style="flex-wrap:nowrap"><select id="asgSel"><option value="">${esc(t('assign_pick'))}</option>${opts.map((u) => `<option value="${esc(u.email)}">${esc(u.name)}${u.email === user.email ? ' ' + t('assign_me') : ''}</option>`).join('')}</select><button class="btn" data-a="assign">${t('assign_btn')}</button></div></div>` : '';
+      })()}
       <div class="sec s-links"><h4>${t('links')}</h4>
         ${c.parent && cards.some((x) => x.id === c.parent) ? `<div class="meta">${t('parent_of')}</div>${linkRow(c.parent, canEdit, 'parent')}` : ''}
         ${kids.length ? `<div class="meta">${t('subcards')}</div>${kids.map((k) => linkRow(k.id, false)).join('')}` : ''}
@@ -707,7 +713,7 @@ function showCard(id, keep) {
         ${canEdit ? `<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="parentId" type="number" min="1" placeholder="${t('set_parent')}"><button class="btn" data-a="setparent">${t('save')}</button></div>` : ''}</div>
       <div class="sec s-data" id="cardData" hidden></div>
       <div class="actions sideacts2 s-more">${sec.join('')}</div>
-      <details class="sec hist s-hist"><summary>${t('history')}</summary>${c.history.map((h) => `<div>${new Date(h.at).toLocaleString(locale())} · ${esc(nameOf(h.user))} · ${esc(t('a_' + h.action))} ${esc(h.text)}</div>`).join('')}</details>
+      <details class="sec hist s-hist"><summary>${t('history')}</summary>${c.history.map((h) => `<div>${new Date(h.at).toLocaleString(locale())} · ${esc(nameOf(h.user))} · ${esc(t('a_' + h.action))} ${esc(h.action === 'assigned' ? nameOf(h.text) : h.text)}</div>`).join('')}</details>
      </aside>
     </div>
     <div class="actions foot"><span class="sp"></span><button class="btn" data-a="close">${t('close')}</button></div>`;
@@ -819,12 +825,14 @@ async function actInner(c, a, btn) {
     }
     const body = {};
     if (a === 'comment') { body.text = $('#cmt').value; if (!body.text.trim()) return; }
+    if (a === 'assign') { body.assignee = $('#asgSel').value; if (!body.assignee) return; }
     if (a === 'fail') return openFailDlg(c);
     try { await api('POST', `/cards/${c.id}/${a}`, body); }
     catch (er) { await load(); if (er.data?.claimed_by) { toast(t('already', nameOf(er.data.claimed_by))); return; } throw er; }
     await load();
     if (a === 'pass') { $('#viewDlg').close(); undoToast(c.id, 'u_passed'); }
     if (a === 'resume') undoToast(c.id, 'u_resumed');
+    if (a === 'assign') undoToast(c.id, 'u_assigned');
     else if (a === 'claim') undoToast(c.id, 'u_claimed');
     else if (a === 'unclaim') undoToast(c.id, 'u_released');
   } catch (e) { toast(e.message); }
@@ -879,6 +887,7 @@ function openCardDlg(c) {
   const ps = f.project, mine = activeProjects();
   ps.innerHTML = mine.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.key)})</option>`).join(''); ps.value = c ? c.project : (mine.some((p) => p.id === curPid()) ? curPid() : mine[0]?.id || '');
   $('#projRow').hidden = !!c || mine.length <= 1;
+  fillAssignee(c);
   if (c) { f.type.value = c.type; f.priority.value = c.priority; f.title.value = c.title; f.description.value = c.description; f.repro.value = c.repro || ''; f.acceptance.value = c.acceptance || ''; f.tags.value = c.tags.join(', '); f.due.value = c.due; f.milestone.value = c.milestone; f.parent.value = c.parent ? cards.find((x) => x.id === c.parent)?.num || '' : ''; }
   else { // restore an unfinished draft
     try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d) { for (const k of Object.keys(d)) if (f[k]) f[k].value = d[k]; $('#draftBar').hidden = false; } } catch { /* ignore */ }
@@ -887,6 +896,12 @@ function openCardDlg(c) {
   cardInitial = formState();
   $('#cardDlg').showModal();
 }
+function fillAssignee(c) { // optional "assign to" when creating a card (dev/admin only)
+  const f = $('#cardForm'), pid = f.project.value, row = $('#asgRow');
+  row.hidden = !!c || !pid || !rl(pid, 'dev', 'admin');
+  f.assignee.innerHTML = `<option value="">—</option>` + assignable(pid).map((u) => `<option value="${esc(u.email)}">${esc(u.name)}${u.email === user.email ? ' ' + t('assign_me') : ''}</option>`).join('');
+}
+$('#cardForm').project.addEventListener('change', () => fillAssignee(null));
 const syncReproRow = () => { $('#reproRow').hidden = $('#cardForm').type.value !== 'ticket'; }; // repro steps only make sense for tickets (bug reports)
 $('#cardForm').type.addEventListener('change', syncReproRow);
 $('#cardForm').addEventListener('input', saveDraft);
@@ -956,6 +971,8 @@ function notifs() {
   const out = [];
   for (const c of cards) {
     for (const m of c.comments) if ((m.mentions || []).includes(user.email) && m.user !== user.email) out.push({ at: m.at, id: c.id, text: t('n_mention', nameOf(m.user), refOf(c)), sub: m.text.slice(0, 80) });
+    const asg = c.status !== 'complete' && c.assignees.includes(user.email) ? c.history.filter((h) => h.action === 'assigned' && h.text === user.email && h.user !== user.email).at(-1) : null;
+    if (asg) out.push({ at: asg.at, id: c.id, text: t('n_assigned', nameOf(asg.user), refOf(c)), sub: c.title.slice(0, 80) });
     if (c.assignees.includes(user.email)) for (const h of c.history) if (h.action === 'test_failed') out.push({ at: h.at, id: c.id, text: t('n_failed', refOf(c)), sub: h.text.slice(0, 80) });
   }
   return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 15);

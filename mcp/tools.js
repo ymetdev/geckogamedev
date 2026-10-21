@@ -46,6 +46,7 @@ export function createServer({ base, token, project = '' }) {
     instructions:
       (project ? `This connection is pinned to project "${project}": you only see and change that project's cards. ` : 'The user may belong to several projects; each card shows its project and ref (e.g. ALPHA-12). Use a project-pinned connection (/mcp?project=...) when working inside one game repo. ') +
       'IMPORTANT: if you are unsure which project, table or card something belongs to, or what the user wants changed, ASK the user before creating or changing anything. Never guess a project. If a card you are working on is unclear or you need a decision from a human, call ask_question (moves it to "Needs info") instead of guessing; later use resume_card once it has been answered. ' +
+      'You can hand a card to a teammate with assign_card (list_team shows who); only when the user asks. ' +
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
       'for details (use get_attachment to look at screenshots on the card; if the card links game data rows or is about balance/stats, read them with list_tables/get_table), fix the code in the repo, verify as far as you can, and ONLY THEN call mark_ready_for_test with a ' +
@@ -71,12 +72,14 @@ export function createServer({ base, token, project = '' }) {
       type: z.enum(['ticket', 'task']).optional(),
       status: z.string().optional().describe('Comma separated: open,in_progress,needs_info,ready_to_test,complete'),
       unassigned: z.boolean().optional(),
+      assignee: z.string().optional().describe('Only cards owned by this person (name, @name or email; see list_team)'),
     },
-  }, wrap(async ({ type, status, unassigned }) => {
+  }, wrap(async ({ type, status, unassigned, assignee }) => {
     const q = new URLSearchParams();
     if (type) q.set('type', type);
     if (status) q.set('status', status);
     if (unassigned) q.set('unassigned', '1');
+    if (assignee) q.set('assignee', assignee);
     return Promise.all((await call('GET', `/cards?${q}`)).map(withRef));
   }));
 
@@ -145,6 +148,7 @@ export function createServer({ base, token, project = '' }) {
       milestone: z.string().optional(),
       parent: z.number().int().optional().describe('Parent card id (makes this a sub-card)'),
       project: z.string().optional().describe('Project id. ASK the user if unsure; required when the connection is not pinned and the user has several projects'),
+      assignee: z.string().optional().describe('Optionally assign it right away to a dev/admin of the project (name or email; see list_team) — only if the user asked'),
     },
   }, wrap(async (a) => {
     if (!project && !a.project && (await call('GET', '/me')).projects.filter((p) => !p.archived).length > 1) throw new Error(ASK + ' Projects: ' + JSON.stringify((await call('GET', '/me')).projects.map((p) => ({ id: p.id, name: p.name }))));
@@ -258,6 +262,23 @@ export function createServer({ base, token, project = '' }) {
     description: 'A card in "Needs info" has been answered (read the new comments with get_card first): move it back to in_progress so you can continue. Optionally add a short note.',
     inputSchema: { id: z.number().int(), note: z.string().optional() },
   }, wrap(async ({ id, note }) => withRef(await call('POST', `/cards/${id}/resume`, note ? { text: note } : {}))));
+
+  server.registerTool('list_team', {
+    description: 'List the people of a project with their role (dev / tester / admin). Use it to find who a card can be assigned to (only devs and admins can own cards).',
+    inputSchema: { project: z.string().optional().describe('Project id; optional when the connection is pinned or the user has one project') },
+  }, wrap(async ({ project: p }) => {
+    const me = await call('GET', '/me'); const act = me.projects.filter((x) => !x.archived);
+    const pid = p || project || (act.length === 1 ? act[0].id : '');
+    if (!pid) throw new Error('Ask the user which project. Projects: ' + JSON.stringify(act.map((x) => ({ id: x.id, name: x.name }))));
+    const proj = act.find((x) => x.id === pid); if (!proj) throw new Error(`Unknown project "${pid}"`);
+    const users = await call('GET', '/users');
+    return users.map((u) => ({ email: u.email, name: u.name, role: u.role === 'admin' ? 'admin' : proj.members?.[u.email] })).filter((u) => u.role).sort((a, b) => a.name.localeCompare(b.name));
+  }));
+
+  server.registerTool('assign_card', {
+    description: 'Assign a card to another dev (or admin) of the same project, or to yourself. Allowed when the card has no owner (anyone dev/admin) or when you are its current owner handing it over (admins can reassign any card). The assignee is notified (Discord, bell); an open card becomes in_progress. Use ONLY when the user asked you to assign; if the person is ambiguous or unknown, ASK (list_team shows who is available). To give your own card back to the pool use release_card.',
+    inputSchema: { id: z.number().int(), assignee: z.string().describe('Name, @name or email of the person (see list_team)') },
+  }, wrap(async ({ id, assignee }) => withRef(await call('POST', `/cards/${id}/assign`, { assignee }))));
 
   server.registerPrompt('import_game_data', {
     description: 'Scan this game repo for balance data (monsters, items, zones, skills…) and put it into GeckoBoard tables',

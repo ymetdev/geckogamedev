@@ -130,6 +130,13 @@ function checkName(raw, exceptEmail) {
   need(!db.users.some((u) => u.email !== exceptEmail && nameKey(u.name) === nameKey(name)), 409, 'Display name already in use');
   return name;
 }
+// "temgoodboi@gmail.com", "@smart", "Smart" or "smart37903" -> the registered user (null if none / ambiguous)
+function resolveUser(raw) {
+  const q = String(raw ?? '').trim().replace(/^@/, '').toLowerCase(); if (!q) return null;
+  const hit = db.users.find((u) => u.email === q); if (hit) return hit;
+  const m = db.users.filter((u) => nameKey(u.name) === nameKey(q) || u.email.split('@')[0] === q);
+  return m.length === 1 ? m[0] : null;
+}
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const publicUser = (u) => ({ email: u.email, name: u.name, role: u.role });
 // Discord user IDs are only shown to admins (and to the person themself)
@@ -153,7 +160,7 @@ const roleIn = (u, projectId) => { // 'admin' | 'dev' | 'tester' | null (no acce
   return p && !p.archived ? p.members?.[u.email] || null : null;
 };
 const forbidIn = (u, projectId, ...roles) => need(roles.includes(roleIn(u, projectId)), 403, `Role "${roleIn(u, projectId) || 'none'}" is not allowed to do this`);
-const myProjects = (u) => db.projects.filter((p) => roleIn(u, p.id)).map((p) => ({ id: p.id, name: p.name, key: p.key, role: roleIn(u, p.id), archived: !!p.archived }));
+const myProjects = (u) => db.projects.filter((p) => roleIn(u, p.id)).map((p) => ({ id: p.id, name: p.name, key: p.key, role: roleIn(u, p.id), archived: !!p.archived, members: p.members || {} }));
 const refOf = (c) => `${projOf(c.project)?.key || '?'}-${c.num ?? c.id}`;
 const visibleCards = (u, pj = '') => db.cards.filter((c) => roleIn(u, c.project) && (!pj || c.project === pj));
 const forbid = (user, ...roles) => need(can(user, ...roles), 403, `Role "${user.role}" is not allowed to do this`);
@@ -161,13 +168,13 @@ const forbid = (user, ...roles) => need(can(user, ...roles), 403, `Role "${user.
 const nameOfUser = (email) => db.users.find((u) => u.email === email)?.name || email;
 // Discord webhook (fire-and-forget; never blocks or breaks the request). Language: DISCORD_LANG=th|en (default th)
 const DLANG = (process.env.DISCORD_LANG || 'th') === 'en' ? 'en' : 'th';
-const COLORS = { needs_info: 0xfb923c, ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ade80, mention: 0x7c8cff, deleted: 0x6b7280 };
+const COLORS = { assigned: 0x38bdf8, needs_info: 0xfb923c, ready_to_test: 0xb48cff, test_failed: 0xf87171, complete: 0x4ade80, mention: 0x7c8cff, deleted: 0x6b7280 };
 const DTXT = {
-  en: { needs_info: '❓ Needs info — a question for you', question: 'Question', pingAsk: '❓ Card {0} needs your answer', ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned', deleted: '🗑 Card deleted',
+  en: { assigned: '📌 A card was assigned to you', pingAssign: '📌 Card {0} was assigned to you', needs_info: '❓ Needs info — a question for you', question: 'Question', pingAsk: '❓ Card {0} needs your answer', ready_to_test: '🧪 Ready to test', test_failed: '❌ Test failed — back to dev', complete: '✅ Complete', mention: '💬 You were mentioned', deleted: '🗑 Card deleted',
     dev: 'Dev', by: 'By', type: 'Type', priority: 'Priority', due: 'Due', ms: 'Milestone', tags: 'Tags', desc: 'Description', summary: 'What was done', steps: 'How to test',
     ping: '🧪 Card {0} is ready for testing!', pingFail: '❌ Card {0} failed testing — please take a look', pingMention: '💬 You were mentioned on card {0}', more: '…and {0} more steps', reason: 'Reason', comment: 'Comment', open: '🔗 Open card for details', status: 'Status', unassigned: 'Unassigned',
     st: { open: 'Open', in_progress: 'In Progress', needs_info: 'Needs info', ready_to_test: 'Ready to Test', complete: 'Complete' }, pri: { low: 'low', medium: 'medium', high: 'high', critical: 'critical' } },
-  th: { needs_info: '❓ รอข้อมูล — มีคำถามถึงคุณ', question: 'คำถาม', pingAsk: '❓ การ์ด {0} รอคำตอบจากคุณ', ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ', deleted: '🗑 ลบการ์ดแล้ว',
+  th: { assigned: '📌 มีการ์ดมอบหมายให้คุณ', pingAssign: '📌 การ์ด {0} ถูกมอบหมายให้คุณ', needs_info: '❓ รอข้อมูล — มีคำถามถึงคุณ', question: 'คำถาม', pingAsk: '❓ การ์ด {0} รอคำตอบจากคุณ', ready_to_test: '🧪 พร้อมเทส', test_failed: '❌ เทสไม่ผ่าน — ส่งกลับให้ Dev', complete: '✅ เสร็จสิ้น', mention: '💬 มีคนแท็กคุณ', deleted: '🗑 ลบการ์ดแล้ว',
     dev: 'Dev', by: 'โดย', type: 'ประเภท', priority: 'ความสำคัญ', due: 'กำหนดส่ง', ms: 'Milestone', tags: 'Tag', desc: 'รายละเอียด', summary: 'สิ่งที่ทำ', steps: 'วิธีเทส',
     ping: '🧪 การ์ด {0} พร้อมให้เทสแล้ว!', pingFail: '❌ การ์ด {0} เทสไม่ผ่าน ช่วยดูหน่อย', pingMention: '💬 มีคนแท็กคุณในการ์ด {0}', more: '…และอีก {0} ข้อ', reason: 'เหตุผล', comment: 'ความคิดเห็น', open: '🔗 กดเพื่อดูรายละเอียดการ์ด', status: 'สถานะ', unassigned: 'ยังไม่มีคนรับ',
     st: { open: 'เปิด', in_progress: 'กำลังทำ', needs_info: 'รอข้อมูล', ready_to_test: 'พร้อมเทส', complete: 'เสร็จสิ้น' }, pri: { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สูง', critical: 'วิกฤต' } },
@@ -185,6 +192,7 @@ function notify(event, card, actor, text = '', who = []) {
   if (event === 'ready_to_test') people = Object.entries(proj?.members || {}).filter(([, r]) => r === 'tester').map(([e]) => e);
   else if (event === 'test_failed') people = card.assignees;
   else if (event === 'mention') people = who;
+  else if (event === 'assigned') people = who;
   else if (event === 'needs_info') people = [card.reporter, ...who]; // the person who can answer: the reporter, plus anyone @mentioned in the question
   const userIds = [...new Set(people.filter((e) => e !== actor).map(idOf).filter(Boolean))];
   const ping = event === 'ready_to_test' && !userIds.length && !!roleId;
@@ -224,7 +232,7 @@ function notify(event, card, actor, text = '', who = []) {
   fetch(hook, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userIds.length
-      ? { content: `${userIds.map((i) => `<@${i}>`).join(' ')} ${(event === 'ready_to_test' ? DTXT.ping : event === 'test_failed' ? DTXT.pingFail : event === 'needs_info' ? DTXT.pingAsk : DTXT.pingMention).replace('{0}', refOf(card))}`, embeds: [embed], allowed_mentions: { users: userIds } }
+      ? { content: `${userIds.map((i) => `<@${i}>`).join(' ')} ${(event === 'ready_to_test' ? DTXT.ping : event === 'test_failed' ? DTXT.pingFail : event === 'needs_info' ? DTXT.pingAsk : event === 'assigned' ? DTXT.pingAssign : DTXT.pingMention).replace('{0}', refOf(card))}`, embeds: [embed], allowed_mentions: { users: userIds } }
       : ping
         ? { content: `<@&${roleId}> ${DTXT.ping.replace('{0}', refOf(card))}`, embeds: [embed], allowed_mentions: { roles: [roleId] } }
         : { embeds: [embed], allowed_mentions: { parse: [] } }),
@@ -790,7 +798,7 @@ async function api(req, res, url) {
     if (q.get('project')) list = list.filter((c) => c.project === q.get('project'));
     if (q.get('type')) list = list.filter((c) => c.type === q.get('type'));
     if (q.get('status')) list = list.filter((c) => q.get('status').split(',').includes(c.status));
-    if (q.get('assignee')) list = list.filter((c) => c.assignees.includes(q.get('assignee')));
+    if (q.get('assignee')) { const who = resolveUser(q.get('assignee'))?.email || q.get('assignee'); list = list.filter((c) => c.assignees.includes(who)); }
     if (q.get('unassigned') === '1') list = list.filter((c) => c.assignees.length === 0);
     return sendJson(res, 200, list);
   }
@@ -818,8 +826,16 @@ async function api(req, res, url) {
       created_at: now(), updated_at: now(),
     };
     log(card, user, 'created');
+    let assignTo = null;
+    if (clean(body.assignee, 120)) { // assign at creation (dev/admin only)
+      forbidIn(me, pid, 'dev', 'admin');
+      assignTo = resolveUser(body.assignee); need(assignTo && ['dev', 'admin'].includes(roleIn(assignTo, pid)), 400, 'Can only assign to a dev or admin of this project');
+      card.assignees = [assignTo.email]; card.status = 'in_progress';
+      log(card, user, 'assigned', assignTo.email); Object.assign(card.history.at(-1), { from: '', prevStatus: 'open' });
+    }
     db.cards.push(card);
     await save();
+    if (assignTo && assignTo.email !== user) notify('assigned', card, user, '', [assignTo.email]);
     return sendJson(res, 201, card);
   }
 
@@ -894,6 +910,20 @@ async function api(req, res, url) {
       log(card, user, 'claimed');
       break;
     }
+    case 'assign': { // hand a card to another dev (the owner, or anyone for an unassigned card; admins always)
+      forbidIn(me, card.project, 'dev', 'admin');
+      need(card.status !== 'complete', 409, 'Card already complete');
+      const target = resolveUser(body.assignee ?? body.email);
+      need(target && ['dev', 'admin'].includes(roleIn(target, card.project)), 400, 'Can only assign to a dev or admin of this project (use the exact name or email)');
+      need(!card.assignees.length || card.assignees.includes(user) || can(me, 'admin'), 403, `Only the current owner (${nameOfUser(card.assignees[0])}) or an admin can hand this card to someone else`);
+      need(card.assignees[0] !== target.email, 409, `Already assigned to ${target.name}`);
+      const from = card.assignees[0] || '', prevStatus = card.status;
+      card.assignees = [target.email];
+      if (card.status === 'open') card.status = 'in_progress';
+      log(card, user, 'assigned', target.email); Object.assign(card.history.at(-1), { from, prevStatus });
+      if (target.email !== user) notify('assigned', card, user, '', [target.email]);
+      break;
+    }
     case 'unclaim': {
       need(card.assignees.includes(user) || can(me, 'admin'), 403, 'Not your card');
       const removed = body.email && can(me, 'admin') ? body.email : user;
@@ -966,6 +996,7 @@ async function api(req, res, url) {
           break;
         }
         case 'ready_to_test': card.status = 'in_progress'; break;
+        case 'assigned': card.assignees = last.from ? [last.from] : []; card.status = last.prevStatus || (card.assignees.length ? 'in_progress' : 'open'); break;
         case 'asked': card.status = 'in_progress'; if (card.comments.at(-1)?.text.startsWith('❓ Needs info')) card.comments.pop(); break;
         case 'resumed': card.status = 'needs_info'; break;
         case 'complete': card.status = 'ready_to_test'; delete card.completed_by; break;
