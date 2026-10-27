@@ -46,6 +46,7 @@ export function createServer({ base, token, project = '' }) {
     instructions:
       (project ? `This connection is pinned to project "${project}": you only see and change that project's cards. ` : 'The user may belong to several projects; each card shows its project and ref (e.g. ALPHA-12). Use a project-pinned connection (/mcp?project=...) when working inside one game repo. ') +
       'IMPORTANT: if you are unsure which project, table or card something belongs to, or what the user wants changed, ASK the user before creating or changing anything. Never guess a project. If a card you are working on is unclear or you need a decision from a human, call ask_question (moves it to "Needs info") instead of guessing; later use resume_card once it has been answered. ' +
+      'The team keeps its game design in NOTES (an Obsidian-style wiki with [[links]]): before implementing a card that touches design (classes, mechanics, art, balance) use search_notes / get_note and follow the [[links]]; the card may link notes (backlinks) or be mentioned as [[MAIN-12]]. Do not invent design: if the notes disagree or are silent, ask_question. Offer to record durable decisions with create_note / update_note (append), but do not rewrite notes without being asked. ' +
       'You can hand a card to a teammate with assign_card (list_team shows who); only when the user asks. ' +
       'GeckoBoard tracks game-team Tickets (bug reports/requests) and Tasks. The dev marks cards they will do ' +
       '(status in_progress, assigned to them). When asked to work on their cards: call list_my_cards, then get_card ' +
@@ -279,6 +280,77 @@ export function createServer({ base, token, project = '' }) {
     description: 'Assign a card to another dev (or admin) of the same project, or to yourself. Allowed when the card has no owner (anyone dev/admin) or when you are its current owner handing it over (admins can reassign any card). The assignee is notified (Discord, bell); an open card becomes in_progress. Use ONLY when the user asked you to assign; if the person is ambiguous or unknown, ASK (list_team shows who is available). To give your own card back to the pool use release_card.',
     inputSchema: { id: z.number().int(), assignee: z.string().describe('Name, @name or email of the person (see list_team)') },
   }, wrap(async ({ id, assignee }) => withRef(await call('POST', `/cards/${id}/assign`, { assignee }))));
+
+  // ---- notes: the team's Obsidian-style design wiki ([[links]], backlinks, #tags, graph) ----
+  const noteBrief = (n) => ({ id: n.id, title: n.title, folder: n.folder || undefined, tags: n.tags?.length ? n.tags : undefined, updated: n.updated_at, ...(n.snippet && { snippet: n.snippet }) });
+  const noteByRef = async ({ id, title, project: p }) => {
+    if (id) return call('GET', `/notes/${encodeURIComponent(id)}`);
+    if (!title) throw new Error('Give a note id or title');
+    const found = await call('GET', `/notes?title=${encodeURIComponent(title)}${p || project ? '&project=' + encodeURIComponent(p || project) : ''}`);
+    if (!found.length) throw new Error(`No note titled "${title}". Use search_notes to look for it.`);
+    if (found.length > 1) throw new Error('Several projects have a note with this title; pass project. ' + JSON.stringify(found.map((n) => ({ id: n.id, project: n.project }))));
+    return call('GET', `/notes/${found[0].id}`);
+  };
+  server.registerTool('search_notes', {
+    description: 'Search / list the project\'s notes (the game design wiki: classes, mechanics, art briefs, decisions). Matches title, text and #tags. Without q it lists the most recently updated. Read relevant notes BEFORE implementing a card that touches game design.',
+    inputSchema: { q: z.string().optional().describe('Words to look for'), tag: z.string().optional().describe('Only notes with this #tag'), project: z.string().optional(), limit: z.number().int().min(1).max(100).optional() },
+  }, wrap(async ({ q, tag, project: p, limit }) => {
+    const qs = new URLSearchParams(); if (q) qs.set('q', q); if (tag) qs.set('tag', tag); if (p || project) qs.set('project', p || project);
+    return (await call('GET', `/notes?${qs}`)).slice(0, limit || 30).map(noteBrief);
+  }));
+  server.registerTool('get_note', {
+    description: 'Read one note by id or exact title: markdown body, tags, properties, outgoing links (note / card / unwritten) and BACKLINKS (notes that link to it, with the linking line). Follow [[links]] by calling get_note again with that title.',
+    inputSchema: { id: z.string().optional().describe('e.g. n3'), title: z.string().optional().describe('Exact title, e.g. "Game - Classes"'), project: z.string().optional() },
+  }, wrap(async (a) => { const n = await noteByRef(a); return { id: n.id, project: n.project, title: n.title, folder: n.folder || undefined, tags: n.tags, props: Object.keys(n.props || {}).length ? n.props : undefined, links: n.links, backlinks: n.backlinks, updated: n.updated_at, body: n.body }; }));
+  server.registerTool('get_note_graph', {
+    description: 'The link graph of the notes of a project: nodes (note / card / unwritten / tag) and edges, plus the most-connected notes. Use it to see how the design hangs together or to find orphan notes and missing pages (unwritten = linked but not created yet).',
+    inputSchema: { project: z.string().optional(), include_tags: z.boolean().optional() },
+  }, wrap(async ({ project: p, include_tags }) => {
+    const g = await call('GET', `/notes/graph${p || project ? '?project=' + encodeURIComponent(p || project) : ''}`);
+    const nodes = g.nodes.filter((n) => include_tags || n.type !== 'tag'), ids = new Set(nodes.map((n) => n.id)), edges = g.edges.filter((e) => ids.has(e.s) && ids.has(e.t));
+    const deg = new Map(); for (const e of edges) { deg.set(e.s, (deg.get(e.s) || 0) + 1); deg.set(e.t, (deg.get(e.t) || 0) + 1); }
+    const name = new Map(nodes.map((n) => [n.id, n.title]));
+    return {
+      notes: nodes.filter((n) => n.type === 'note').length, cards: nodes.filter((n) => n.type === 'card').length, unwritten: nodes.filter((n) => n.type === 'ghost').map((n) => n.title),
+      orphans: nodes.filter((n) => n.type === 'note' && !deg.get(n.id)).map((n) => n.title),
+      most_connected: nodes.filter((n) => n.type === 'note').sort((a, b) => (deg.get(b.id) || 0) - (deg.get(a.id) || 0)).slice(0, 8).map((n) => ({ title: n.title, links: deg.get(n.id) || 0 })),
+      edges: edges.map((e) => [name.get(e.s), name.get(e.t)]),
+    };
+  }));
+  server.registerTool('create_note', {
+    description: 'Create a note (dev/admin). Markdown body; link other notes with [[Exact Title]] or [[Title|shown text]], link a card with [[MAIN-12]], tag with #tag. Title must be unique in the project (no / \\ : ? * " < > # | ^ [ ]). Check search_notes first so you do not duplicate an existing note. Write in the language the team uses (usually Thai). If the project is unclear, ASK.',
+    inputSchema: { title: z.string(), body: z.string().optional(), tags: z.array(z.string()).optional(), folder: z.string().optional(), project: z.string().optional() },
+  }, wrap(async ({ title, body, tags, folder, project: p }) => {
+    if (!project && !p && (await call('GET', '/me')).projects.filter((x) => !x.archived).length > 1) throw new Error(ASK + ' Projects: ' + JSON.stringify((await call('GET', '/me')).projects.map((x) => ({ id: x.id, name: x.name }))));
+    const n = await call('POST', '/notes', { title, body, tags, folder, project: p || project || undefined }); return { id: n.id, title: n.title, links: n.links };
+  }));
+  server.registerTool('update_note', {
+    description: 'Edit a note (dev/admin). Pass `body` to REPLACE the whole text, or `append` to add text at the end (safer: prefer append / small edits, and read the note with get_note first so you do not drop content). Renaming (`title`) also rewrites [[links]] in other notes. The previous text is kept in the note history. Do not rewrite large notes unless the user asked.',
+    inputSchema: { id: z.string().optional(), title_of_note: z.string().optional().describe('Exact current title (instead of id)'), new_title: z.string().optional(), body: z.string().optional(), append: z.string().optional(), tags: z.array(z.string()).optional(), project: z.string().optional() },
+  }, wrap(async ({ id, title_of_note, new_title, body, append, tags, project: p }) => {
+    const n = await noteByRef({ id, title: title_of_note, project: p });
+    const r = await call('PATCH', `/notes/${n.id}`, { ...(new_title && { title: new_title }), ...(body !== undefined && { body }), ...(append !== undefined && { append }), ...(tags && { tags }) });
+    return { id: r.id, title: r.title, size: r.body.length, backlinks: r.backlinks.length };
+  }));
+  server.registerTool('delete_note', {
+    description: 'Delete a note (dev/admin). It goes to the notes trash and can be restored with restore_note. Only when the user clearly asked; confirm_title must equal the note title.' + ' If unsure which note, ASK first.',
+    inputSchema: { id: z.string(), confirm_title: z.string() },
+  }, wrap(async ({ id, confirm_title }) => {
+    const n = await call('GET', `/notes/${encodeURIComponent(id)}`);
+    if (n.title !== confirm_title) throw new Error(`confirm_title must equal the note title ("${n.title}"). Ask the user before deleting.`);
+    await call('DELETE', `/notes/${encodeURIComponent(id)}`); return { deleted: id, title: n.title, restorable: true, backlinks_now_unwritten: n.backlinks.length };
+  }));
+  server.registerTool('restore_note', {
+    description: 'Restore a deleted note from the notes trash (dev/admin). Without id, lists what can be restored.',
+    inputSchema: { id: z.string().optional() },
+  }, wrap(async ({ id }) => { if (!id) return (await call('GET', '/notes/trash')).map(noteBrief); const n = await call('POST', `/notes/${encodeURIComponent(id)}/restore`, {}); return { restored: n.id, title: n.title }; }));
+  server.registerTool('import_notes', {
+    description: 'Bulk-import markdown files as notes (dev/admin), e.g. an Obsidian vault read from disk: one {name, content} per file (name = file name; the title is the name without .md; front matter and [[links]] are kept). Existing titles are skipped unless overwrite=true (old text stays in history). Up to 300 files per call. Returns the links that point to notes that do not exist yet.',
+    inputSchema: { files: z.array(z.object({ name: z.string(), content: z.string(), folder: z.string().optional() })).min(1).max(300), overwrite: z.boolean().optional(), project: z.string().optional() },
+  }, wrap(async ({ files, overwrite, project: p }) => {
+    if (!project && !p && (await call('GET', '/me')).projects.filter((x) => !x.archived).length > 1) throw new Error(ASK + ' Projects: ' + JSON.stringify((await call('GET', '/me')).projects.map((x) => ({ id: x.id, name: x.name }))));
+    return call('POST', '/notes/import', { files, overwrite: !!overwrite, project: p || project || undefined });
+  }));
 
   server.registerPrompt('import_game_data', {
     description: 'Scan this game repo for balance data (monsters, items, zones, skills…) and put it into GeckoBoard tables',

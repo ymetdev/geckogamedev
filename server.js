@@ -61,7 +61,7 @@ if (pool) {
 } else {
   try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { /* fresh db */ }
 }
-db.users ||= []; db.sessions ||= {}; db.trash ||= []; db.projects ||= []; db.tables ||= []; db.tseq ||= db.tables.length;
+db.users ||= []; db.sessions ||= {}; db.trash ||= []; db.projects ||= []; db.tables ||= []; db.tseq ||= db.tables.length; db.notes ||= []; db.nseq ||= db.notes.length; db.notesTrash ||= [];
 // one-time migration: files from the first version (id-addressed table / raw files) -> content-addressed blobs
 for (const c of db.cards) for (const f of c.files || []) {
   if (f.blob) continue;
@@ -119,6 +119,9 @@ function save() {
 }
 
 import crypto from 'node:crypto';
+import { tkey, cleanTitle, parseFrontmatter, extractLinks, extractTags, renameLinks, snippetAround, linkContext, CARD_REF } from './lib/notes.js';
+const NOTE_MAX = 200000;
+const cleanFolder = (f) => String(f ?? '').replace(/\\/g, '/').split('/').map((x) => x.replace(/[\u0000-\u001f<>:"|?*]/g, '').trim()).filter(Boolean).slice(0, 4).join('/').slice(0, 120);
 function newUser(email, name, role) {
   return { email, name, role, token: crypto.randomBytes(24).toString('hex'), created_at: new Date().toISOString() };
 }
@@ -298,7 +301,7 @@ async function listBackups() {
   } catch { return []; }
 }
 async function makeBackup(label = 'manual') {
-  const body = JSON.stringify({ version: 2, taken_at: now(), seq: db.seq, cards: db.cards, trash: db.trash, users: db.users, projects: db.projects, tables: db.tables, tseq: db.tseq });
+  const body = JSON.stringify({ version: 2, taken_at: now(), seq: db.seq, cards: db.cards, trash: db.trash, users: db.users, projects: db.projects, tables: db.tables, tseq: db.tseq, notes: db.notes, nseq: db.nseq });
   if (body.length > BACKUP_MAX_BYTES) throw new HttpError(413, 'Data is too large to back up automatically');
   if (pool) {
     await pool.query('INSERT INTO devboard_backups (label, size, data) VALUES ($1, $2, $3::jsonb)', [label, body.length, body]);
@@ -323,6 +326,7 @@ async function restoreBackup(id) { // brings back cards + trash (users and sessi
   db.cards = data.cards; db.trash = data.trash || []; db.seq = Math.max(db.seq, data.seq || 0);
   if (Array.isArray(data.projects) && data.projects.length) db.projects = data.projects;
   if (Array.isArray(data.tables)) { db.tables = data.tables; db.tseq = Math.max(db.tseq || 0, data.tseq || 0); }
+  if (Array.isArray(data.notes)) { db.notes = data.notes; db.nseq = Math.max(db.nseq || 0, data.nseq || 0); }
   for (const c of [...db.cards, ...db.trash]) { c.project ??= db.projects[0].id; c.num ??= c.id; }
   for (const c of db.cards) { c.due ??= ''; c.milestone ??= ''; c.parent ??= null; c.related ??= []; c.files ??= []; c.repro ??= ''; c.acceptance ??= ''; }
   await save();
@@ -585,7 +589,7 @@ async function api(req, res, url) {
       return res.end(exportCsv());
     }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="geckoboard-${day}.json"` });
-    return res.end(JSON.stringify({ exported_at: now(), projects: db.projects.map(({ discord_webhook, ...p }) => p), cards: db.cards, trash: db.trash, tables: db.tables, users: db.users.map(publicUser) }, null, 2)); // no tokens
+    return res.end(JSON.stringify({ exported_at: now(), projects: db.projects.map(({ discord_webhook, ...p }) => p), cards: db.cards, trash: db.trash, tables: db.tables, notes: db.notes, users: db.users.map(publicUser) }, null, 2)); // no tokens
   }
 
   // ---- storage ----
@@ -787,6 +791,130 @@ async function api(req, res, url) {
       if (body.replace) t.rows = made; else t.rows.push(...made);
       hist(t, { op: 'import', label: `${made.length} rows${body.replace ? ' (replaced all)' : ''}` }); await save();
       return sendJson(res, 200, t);
+    }
+    throw new HttpError(405, 'Method not allowed');
+  }
+
+  // ---- notes (Obsidian-style: markdown, [[links]], backlinks, graph) ----
+  if (parts[0] === 'notes') {
+    const nOf = (id) => { const n = db.notes.find((x) => x.id === id); need(n && roleIn(me, n.project), 404, 'Note not found'); return n; };
+    const brief = (n) => ({ id: n.id, project: n.project, title: n.title, folder: n.folder || '', tags: n.tags || [], updated_at: n.updated_at, updated_by: n.updated_by, size: n.body.length });
+    const projNotes = (pid) => db.notes.filter((n) => n.project === pid);
+    const resolve = (pid, target) => { // -> { type: 'note'|'card'|'ghost', ... }
+      const k = tkey(target), n = db.notes.find((x) => x.project === pid && tkey(x.title) === k); if (n) return { type: 'note', note: n };
+      const m = CARD_REF.exec(target.trim()), pr = projOf(pid);
+      if (m && pr && pr.key === m[1].toUpperCase()) { const c = db.cards.find((x) => x.project === pid && x.num === Number(m[2])); if (c) return { type: 'card', card: c }; }
+      return { type: 'ghost', key: k, title: target.trim() };
+    };
+    const backlinksOf = (n) => projNotes(n.project).filter((o) => o !== n && extractLinks(o.body).some((l) => tkey(l.target) === tkey(n.title)))
+      .map((o) => ({ id: o.id, title: o.title, context: linkContext(o.body, tkey(n.title)) }));
+    const full = (n) => ({ ...brief(n), props: n.props || {}, body: n.body, created_at: n.created_at, created_by: n.created_by, backlinks: backlinksOf(n),
+      links: [...new Map(extractLinks(n.body).map((l) => [tkey(l.target), l])).values()].map((l) => { const r = resolve(n.project, l.target); return { target: l.target, type: r.type, id: r.note?.id || (r.card ? r.card.id : undefined) }; }),
+      history: (n.history || []).map((h, i) => ({ i, at: h.at, user: h.user, title: h.title, size: h.body.length })).reverse() });
+    const save1 = (n, patch, userEmail) => { // apply title/body/props change with history + rename propagation
+      const before = { at: now(), user: n.updated_by || userEmail, title: n.title, body: n.body };
+      if (patch.title !== undefined && patch.title !== n.title) {
+        const nt = cleanTitle(patch.title); need(nt, 400, 'Title required');
+        need(!db.notes.some((x) => x !== n && x.project === n.project && tkey(x.title) === tkey(nt)), 409, 'A note with this title already exists');
+        for (const o of projNotes(n.project)) if (o !== n) { const nb = renameLinks(o.body, n.title, nt); if (nb !== o.body) o.body = nb; }
+        n.title = nt;
+      }
+      if (patch.body !== undefined) {
+        const b = String(patch.body).replace(/\r\n?/g, '\n').slice(0, NOTE_MAX);
+        if (b !== n.body) { if (n.body) (n.history ||= []).push(before); if (n.history.length > 15) n.history.shift(); n.body = b; }
+      }
+      if (patch.props !== undefined) n.props = patch.props;
+      n.tags = extractTags(n.body, n.props); n.updated_at = now(); n.updated_by = userEmail;
+    };
+    const mine = db.notes.filter((n) => roleIn(me, n.project));
+    const projectFor = (raw) => { // never guess a project when the user has several
+      const act = myProjects(me).filter((x) => !x.archived);
+      need(clean(raw, 60) || pj || act.length <= 1, 400, `Project required: ask the user which project. Options: ${act.map((x) => `${x.id} (${x.name})`).join(', ')}`);
+      return clean(raw, 60) || pj || act[0]?.id;
+    };
+
+    if (parts.length === 1 && method === 'GET') {
+      const q = url.searchParams, pid = clean(q.get('project'), 60) || pj; let list = mine.filter((n) => !pid || n.project === pid);
+      if (q.get('title')) list = list.filter((n) => tkey(n.title) === tkey(q.get('title')));
+      if (q.get('tag')) list = list.filter((n) => (n.tags || []).includes(q.get('tag').toLowerCase().replace(/^#/, '')));
+      if (q.get('mentions')) { const k = tkey(q.get('mentions')); list = list.filter((n) => extractLinks(n.body).some((l) => tkey(l.target) === k)); }
+      const s = clean(q.get('q'), 100);
+      if (s) { const sl = s.toLowerCase(); list = list.filter((n) => n.title.toLowerCase().includes(sl) || n.body.toLowerCase().includes(sl) || (n.tags || []).some((t) => t.includes(sl.replace(/^#/, '')))); }
+      return sendJson(res, 200, list.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map((n) => ({ ...brief(n), ...(s && { snippet: snippetAround(n.body, s) }) })));
+    }
+    if (parts[1] === 'graph' && method === 'GET') { // { nodes, edges } for the graph view of one project
+      const pid = projectFor(url.searchParams.get('project')); need(roleIn(me, pid), 403, 'Pick a project you belong to');
+      const ns = projNotes(pid), nodes = new Map(), edges = new Map();
+      const addEdge = (a, b, kind = 'link') => { if (a === b) return; const k = a < b ? a + '|' + b : b + '|' + a; if (!edges.has(k)) edges.set(k, { s: a, t: b, kind }); };
+      for (const n of ns) nodes.set(n.id, { id: n.id, type: 'note', title: n.title, tags: n.tags || [], folder: n.folder || '', size: n.body.length, updated_at: n.updated_at });
+      for (const n of ns) {
+        for (const l of extractLinks(n.body)) {
+          const r = resolve(pid, l.target);
+          if (r.type === 'note') addEdge(n.id, r.note.id);
+          else if (r.type === 'card') { const id = 'c' + r.card.id; if (!nodes.has(id)) nodes.set(id, { id, type: 'card', title: `${refOf(r.card)} ${r.card.title}`, status: r.card.status, cardId: r.card.id }); addEdge(n.id, id); }
+          else { const id = 'g:' + r.key; if (!nodes.has(id)) nodes.set(id, { id, type: 'ghost', title: r.title }); addEdge(n.id, id); }
+        }
+        for (const t of n.tags || []) { const id = 't:' + t; if (!nodes.has(id)) nodes.set(id, { id, type: 'tag', title: '#' + t }); addEdge(n.id, id, 'tag'); }
+      }
+      return sendJson(res, 200, { nodes: [...nodes.values()], edges: [...edges.values()] });
+    }
+    if (parts[1] === 'export' && method === 'GET') {
+      const pid = projectFor(url.searchParams.get('project')); need(roleIn(me, pid), 403, 'Pick a project you belong to');
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="notes-${pid}-${now().slice(0, 10)}.json"` });
+      return res.end(JSON.stringify(projNotes(pid).map((n) => ({ title: n.title, folder: n.folder || '', props: n.props || {}, tags: n.tags || [], body: n.body, updated_at: n.updated_at })), null, 2));
+    }
+    if (parts.length === 1 && method === 'POST') {
+      const pid = projectFor(body.project); forbidIn(me, pid, 'dev', 'admin');
+      const title = cleanTitle(body.title); need(title, 400, 'Title required');
+      need(!projNotes(pid).some((x) => tkey(x.title) === tkey(title)), 409, 'A note with this title already exists');
+      need(projNotes(pid).length < 1000 && db.notes.length < 3000, 409, 'Too many notes');
+      const n = { id: `n${++db.nseq}`, project: pid, title, folder: cleanFolder(body.folder), body: '', props: {}, tags: [], history: [], created_at: now(), created_by: user, updated_at: now(), updated_by: user };
+      db.notes.push(n);
+      save1(n, { body: body.body ?? '', props: body.props && typeof body.props === 'object' ? body.props : undefined }, user);
+      if (Array.isArray(body.tags) && body.tags.length) { n.props = { ...n.props, tags: [...new Set([...(Array.isArray(n.props.tags) ? n.props.tags : []), ...body.tags.map((t) => clean(t, 40))])] }; n.tags = extractTags(n.body, n.props); }
+      await save(); return sendJson(res, 201, full(n));
+    }
+    if (parts[1] === 'import' && method === 'POST') { // body: { project, files: [{ name, content, folder? }], overwrite? }
+      const pid = projectFor(body.project); forbidIn(me, pid, 'dev', 'admin');
+      const files = Array.isArray(body.files) ? body.files : []; need(files.length > 0 && files.length <= 300, 400, 'Send 1-300 files');
+      const out = { created: 0, updated: 0, skipped: 0, titles: [] };
+      for (const f of files) {
+        const title = cleanTitle(String(f.name || '').split(/[\\/]/).pop()); if (!title) { out.skipped++; continue; }
+        const { props, body: b } = parseFrontmatter(f.content);
+        const ex = projNotes(pid).find((x) => tkey(x.title) === tkey(title));
+        if (ex) { if (!body.overwrite) { out.skipped++; continue; } save1(ex, { body: b, props }, user); out.updated++; }
+        else {
+          need(projNotes(pid).length < 1000 && db.notes.length < 3000, 409, 'Too many notes');
+          const n = { id: `n${++db.nseq}`, project: pid, title, folder: cleanFolder(f.folder), body: '', props: {}, tags: [], history: [], created_at: now(), created_by: user, updated_at: now(), updated_by: user };
+          db.notes.push(n); save1(n, { body: b, props }, user); out.created++;
+        }
+        out.titles.push(title);
+      }
+      await save();
+      const pn = projNotes(pid), known = new Set(pn.map((x) => tkey(x.title))); let unresolved = new Set();
+      for (const n of pn) for (const l of extractLinks(n.body)) if (!known.has(tkey(l.target)) && !CARD_REF.test(l.target)) unresolved.add(l.target);
+      return sendJson(res, 200, { ...out, notes: pn.length, unresolved: [...unresolved].slice(0, 50) });
+    }
+    if (parts[1] === 'trash' && method === 'GET') return sendJson(res, 200, db.notesTrash.filter((n) => ['dev', 'admin'].includes(roleIn(me, n.project))).map((n) => ({ ...brief(n), deleted_at: n.deleted_at })));
+    if (parts[2] === 'restore' && method === 'POST') {
+      const n = db.notesTrash.find((x) => x.id === parts[1]); need(n && ['dev', 'admin'].includes(roleIn(me, n.project)), 404, 'Nothing to restore');
+      need(!projNotes(n.project).some((x) => tkey(x.title) === tkey(n.title)), 409, 'A note with this title already exists');
+      db.notesTrash = db.notesTrash.filter((x) => x !== n); delete n.deleted_at; db.notes.push(n); await save(); return sendJson(res, 200, full(n));
+    }
+    const n = nOf(parts[1]);
+    if (parts.length === 2 && method === 'GET') return sendJson(res, 200, full(n));
+    if (parts[2] === 'revision' && method === 'GET') { const h = (n.history || [])[Number(parts[3])]; need(h, 404, 'Revision not found'); return sendJson(res, 200, h); }
+    forbidIn(me, n.project, 'dev', 'admin');
+    if (parts.length === 2 && method === 'PATCH') {
+      if (body.append !== undefined) body.body = n.body + (n.body && !n.body.endsWith('\n') ? '\n' : '') + String(body.append);
+      let props = n.props; if (Array.isArray(body.tags)) { props = { ...(n.props || {}), tags: body.tags.map((t) => clean(t, 40)).filter(Boolean) }; }
+      save1(n, { title: body.title, body: body.body, props: body.props && typeof body.props === 'object' ? body.props : props }, user);
+      await save(); return sendJson(res, 200, full(n));
+    }
+    if (parts[2] === 'revert' && method === 'POST') { const h = (n.history || [])[Number(body.index)]; need(h, 404, 'Revision not found'); save1(n, { body: h.body }, user); await save(); return sendJson(res, 200, full(n)); }
+    if (parts.length === 2 && method === 'DELETE') {
+      db.notes = db.notes.filter((x) => x !== n); n.deleted_at = now(); db.notesTrash.push(n); if (db.notesTrash.length > 100) db.notesTrash.shift();
+      await save(); return sendJson(res, 200, { ok: true, id: n.id });
     }
     throw new HttpError(405, 'Method not allowed');
   }

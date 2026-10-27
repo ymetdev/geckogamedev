@@ -22,6 +22,7 @@
   <button class="btn need" id="needBtn" aria-pressed="false"></button>
   <span class="sp mobsp"></span>
   <div class="hx" id="hx">
+    <button class="btn icon" id="notesBtn" aria-label="Notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="7" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M7.8 8.2l3 7.8M16.4 7.7l-3.2 8.4M8.2 7h7.6"/></svg></button>
     <button class="btn icon" id="dataBtn" aria-label="Game data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></button>
     <button class="btn icon" id="sumBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="lbl" data-i18n="sum_btn"></span></button>
     <div class="seg" id="langSeg" title="Language / ภาษา"><button data-v="th">TH</button><button data-v="en">EN</button></div>
@@ -187,6 +188,10 @@
     <details><summary>มอบหมายงานให้กัน (Dev)</summary><ul>
       <li>ในรายละเอียดการ์ดมีช่อง "มอบหมายให้" (การ์ดที่ยังไม่มีเจ้าของ Dev คนไหนก็มอบหมายให้เพื่อนได้) หรือ "ส่งต่อให้" (เจ้าของการ์ดส่งต่อให้ Dev คนอื่น) Admin มอบหมายใหม่ได้ทุกใบ · ตอนสร้างการ์ดก็เลือกคนได้เลย</li>
       <li>มอบหมายได้เฉพาะ Dev/Admin ของโปรเจกต์ การ์ดที่เป็นของคนอื่นแล้วต้องให้เจ้าของหรือ Admin ส่งต่อ · คนที่ได้รับงานจะเห็นในกระดิ่ง และได้แท็กใน Discord (ถ้าตั้ง Discord ID) · Undo ได้ 5 นาที · สั่ง Claude ได้ เช่น "มอบหมาย MAIN-5 ให้ Dev Two" (assign_card, list_team)</li></ul></details>
+    <details><summary>โน้ตแบบ Obsidian + กราฟ</summary><ul>
+      <li>ปุ่มไอคอนวงกลมเชื่อมกันบนแถบบน = เปิด "โน้ต" (wiki ดีไซน์เกมของโปรเจกต์) เขียนด้วย Markdown ลิงก์โน้ตด้วย [[ชื่อโน้ต]] ลิงก์การ์ดด้วย [[MAIN-12]] ใส่แท็กด้วย #แท็ก · มี Backlinks (ใครลิงก์มาที่โน้ตนี้) ประวัติเวอร์ชัน และเปลี่ยนชื่อโน้ตแล้วลิงก์ในโน้ตอื่นอัปเดตตาม</li>
+      <li>แท็บ <b>กราฟ</b> = แผนผังความเชื่อมโยงสวยๆ แบบ Obsidian: ลาก/ซูม/คลิกเพื่อดู ดับเบิลคลิกเพื่อเปิดโน้ต กรองด้วยคำ ซ่อน/แสดงการ์ด แท็ก และโน้ตที่ยังไม่ได้เขียน และมี "กราฟเฉพาะโน้ตนี้"</li>
+      <li>นำเข้า vault ได้ทั้งโฟลเดอร์ (ปุ่ม นำเข้า → เลือกโฟลเดอร์) ชื่อโน้ต = ชื่อไฟล์ · Dev/Admin เขียนได้ Tester อ่านอย่างเดียว · Claude อ่าน/เขียนโน้ตได้ผ่าน MCP (search_notes, get_note, create_note, update_note ...)</li></ul></details>
     <details><summary>หลายโปรเจกต์</summary><ul>
       <li>ตัวสลับโปรเจกต์อยู่แถบบน (ถ้าคุณอยู่โปรเจกต์เดียวจะไม่แสดง) เลือก <b>ทุกโปรเจกต์</b> เพื่อดูรวม</li>
       <li>เลขการ์ดแยกต่อโปรเจกต์ เช่น <code>ALPHA-12</code> พิมพ์ <code>12</code> หรือ <code>alpha-12</code> ในช่องค้นหาได้</li>
@@ -261,6 +266,10 @@
     <details><summary>Assigning cards to each other (devs)</summary><ul>
       <li>In a card's details use "Assign to" (an unowned card: any dev can assign it to a teammate) or "Hand over to" (the owner passes it on). Admins can reassign any card. You can also pick someone when creating a card.</li>
       <li>Only devs/admins of the project can be assigned; a card someone already owns must be handed over by its owner or an admin. The new owner sees it in the bell and gets a Discord ping (if their Discord ID is set). Undo works for 5 minutes. Ask Claude too, e.g. "assign MAIN-5 to Dev Two" (assign_card, list_team).</li></ul></details>
+    <details><summary>Obsidian-style notes + graph</summary><ul>
+      <li>The linked-circles icon in the top bar opens “Notes”, your project’s game-design wiki. Write Markdown, link notes with [[Note title]], link a card with [[MAIN-12]], tag with #tag. You get backlinks, version history, and renaming a note updates the links in other notes.</li>
+      <li>The <b>Graph</b> tab is an Obsidian-style map of how everything connects: drag, zoom, click to inspect, double-click to open; filter by text; show/hide cards, tags and not-yet-written notes; “Local graph” for one note.</li>
+      <li>Import a whole vault (Import → choose a folder); the note title is the file name. Devs/admins write, testers read. Claude can read and write notes through MCP (search_notes, get_note, create_note, update_note …).</li></ul></details>
     <details><summary>Multiple projects</summary><ul>
       <li>The project switcher is in the top bar (hidden if you only belong to one). Pick <b>All projects</b> for a combined view</li>
       <li>Card numbers are per project, e.g. <code>ALPHA-12</code>. Type <code>12</code> or <code>alpha-12</code> in search</li>
@@ -350,6 +359,9 @@
 <script src="/i18n.js"></script>
 <script src="/app.js"></script>
 <script src="/data.js"></script>
+<script src="/md.js"></script>
+<script src="/graph.js"></script>
+<script src="/notes.js"></script>
 <script src="/fx.js"></script>
 </body>
 </html>
